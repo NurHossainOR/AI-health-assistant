@@ -1,0 +1,440 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Vitalis — Every result, understood.</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,300;9..144,450;9..144,560;9..144,680&family=Public+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root{
+  --paper:#FBF8F3;
+  --paper-dim:#F3EFE7;
+  --ink:#12181B;
+  --ink-soft:#4B5450;
+  --teal:#0E6F64;
+  --teal-deep:#0A5147;
+  --teal-tint:#E7EEE7;
+  --coral:#E1583F;
+  --coral-tint:#FBEAE6;
+  --line:#DCE3DC;
+  --gold:#B9902A;
+  --radius:14px;
+  --shadow:0 1px 2px rgba(18,24,27,.04), 0 12px 32px -16px rgba(18,24,27,.18);
+}
+*{box-sizing:border-box; margin:0; padding:0;}
+html{scroll-behavior:smooth;}
+body{
+  background:var(--paper);
+  color:var(--ink);
+  font-family:'Public Sans', sans-serif;
+  -webkit-font-smoothing:antialiased;
+  overflow-x:hidden;
+}
+a{color:inherit; text-decoration:none;}
+.wrap{max-width:1180px; margin:0 auto; padding:0 32px;}
+.eyebrow{
+  font-family:'IBM Plex Mono', monospace;
+  font-size:12.5px;
+  letter-spacing:.14em;
+  text-transform:uppercase;
+  color:var(--teal-deep);
+  display:flex; align-items:center; gap:10px;
+}
+.eyebrow::before{content:''; width:18px; height:1px; background:var(--teal); display:inline-block;}
+h1,h2,h3{font-family:'Fraunces', serif; font-weight:560; letter-spacing:-.01em; line-height:1.05;}
+::selection{background:var(--teal); color:var(--paper);}
+:focus-visible{outline:2px solid var(--teal); outline-offset:3px;}
+
+/* ---------- NAV ---------- */
+nav{
+  position:sticky; top:0; z-index:50;
+  background:rgba(251,248,243,.82);
+  backdrop-filter:blur(10px);
+  border-bottom:1px solid var(--line);
+}
+.nav-inner{
+  max-width:1180px; margin:0 auto; padding:18px 32px;
+  display:flex; align-items:center; justify-content:space-between;
+}
+.logo{display:flex; align-items:center; gap:10px; font-family:'Fraunces', serif; font-weight:560; font-size:20px;}
+.logo svg{display:block;}
+.nav-links{display:flex; gap:34px; font-size:14.5px; font-weight:500; color:var(--ink-soft);}
+.nav-links a:hover{color:var(--ink);}
+.nav-cta{display:flex; align-items:center; gap:18px;}
+.btn{
+  display:inline-flex; align-items:center; justify-content:center; gap:8px;
+  padding:11px 22px; border-radius:999px; font-size:14.5px; font-weight:600;
+  cursor:pointer; border:1px solid transparent; transition:transform .18s ease, box-shadow .18s ease, background .18s ease;
+}
+.btn-primary{background:var(--ink); color:var(--paper);}
+.btn-primary:hover{background:var(--teal-deep); transform:translateY(-1px); box-shadow:var(--shadow);}
+.btn-ghost{color:var(--ink); border-color:var(--line); background:transparent;}
+.btn-ghost:hover{border-color:var(--ink);}
+.link-arrow{font-size:14.5px; font-weight:600; color:var(--teal-deep); display:inline-flex; align-items:center; gap:6px;}
+.link-arrow svg{transition:transform .18s ease;}
+.link-arrow:hover svg{transform:translateX(3px);}
+
+/* ---------- HERO ---------- */
+.hero{position:relative; padding:96px 0 60px; overflow:hidden;}
+.hero-grid{display:grid; grid-template-columns:1.05fr .95fr; gap:56px; align-items:center;}
+.hero h1{font-size:clamp(40px,5vw,64px); margin:22px 0 22px;}
+.hero h1 em{font-style:italic; color:var(--teal-deep); font-weight:450;}
+.hero p.sub{font-size:18px; color:var(--ink-soft); max-width:460px; line-height:1.6; margin-bottom:32px;}
+.hero-ctas{display:flex; gap:14px; align-items:center; margin-bottom:40px;}
+.trust-row{display:flex; gap:26px; flex-wrap:wrap; font-family:'IBM Plex Mono', monospace; font-size:12px; color:var(--ink-soft); letter-spacing:.02em;}
+.trust-row span{display:flex; align-items:center; gap:7px;}
+.trust-dot{width:6px; height:6px; border-radius:50%; background:var(--teal); display:inline-block;}
+
+/* Hero visual: pulse line + floating report card */
+.hero-visual{position:relative; height:460px;}
+.pulse-svg{position:absolute; inset:0; width:100%; height:100%;}
+.pulse-path{
+  fill:none; stroke:var(--teal); stroke-width:2; stroke-linecap:round; stroke-linejoin:round;
+  stroke-dasharray:1400; stroke-dashoffset:1400;
+  animation:draw 2.4s cubic-bezier(.65,0,.35,1) .3s forwards;
+}
+@keyframes draw{to{stroke-dashoffset:0;}}
+.float-card{
+  position:absolute; background:#fff; border:1px solid var(--line); border-radius:var(--radius);
+  box-shadow:var(--shadow); padding:20px;
+}
+.card-report{top:18px; right:6px; width:280px; animation:rise .9s ease .4s both;}
+.card-chip{bottom:36px; left:0; width:230px; animation:rise .9s ease .7s both;}
+@keyframes rise{from{opacity:0; transform:translateY(16px);} to{opacity:1; transform:translateY(0);}}
+.report-head{display:flex; justify-content:space-between; align-items:center; margin-bottom:14px;}
+.report-title{font-size:13px; font-weight:600;}
+.badge{font-family:'IBM Plex Mono', monospace; font-size:10.5px; padding:3px 8px; border-radius:999px; font-weight:600; letter-spacing:.02em;}
+.badge-normal{background:var(--teal-tint); color:var(--teal-deep);}
+.badge-watch{background:var(--coral-tint); color:var(--coral);}
+.report-row{display:flex; justify-content:space-between; align-items:baseline; padding:7px 0; border-top:1px solid var(--paper-dim);}
+.report-row:first-of-type{border-top:none;}
+.rr-label{font-size:12.5px; color:var(--ink-soft);}
+.rr-val{font-family:'IBM Plex Mono', monospace; font-size:13px; font-weight:600;}
+.rr-val.flag{color:var(--coral);}
+.chip-line{display:flex; align-items:center; gap:12px;}
+.chip-avatar{width:34px; height:34px; border-radius:50%; background:var(--teal); color:#fff; display:flex; align-items:center; justify-content:center; font-family:'Fraunces',serif; font-size:14px;}
+.chip-text{font-size:12.5px; line-height:1.4; color:var(--ink-soft);}
+.chip-text strong{color:var(--ink); font-weight:600;}
+
+/* ---------- SECTION SCAFFOLD ---------- */
+section{padding:100px 0;}
+.section-head{max-width:620px; margin-bottom:56px;}
+.section-head h2{font-size:clamp(30px,3.4vw,42px); margin-top:16px;}
+.section-head p{color:var(--ink-soft); font-size:16.5px; line-height:1.6; margin-top:16px;}
+.divider{
+  height:52px; position:relative; overflow:hidden;
+}
+.divider svg{width:100%; height:100%; display:block;}
+
+/* ---------- JOURNEY (numbered — real sequence) ---------- */
+.journey{background:var(--teal-deep); color:var(--paper);}
+.journey .section-head p{color:#CFE0DC;}
+.journey .eyebrow{color:#9FD6C9;}
+.journey .eyebrow::before{background:#9FD6C9;}
+.j-grid{display:grid; grid-template-columns:repeat(4,1fr); gap:1px; background:rgba(255,255,255,.14); border:1px solid rgba(255,255,255,.14); border-radius:var(--radius); overflow:hidden;}
+.j-step{background:var(--teal-deep); padding:34px 26px; position:relative;}
+.j-num{font-family:'IBM Plex Mono', monospace; font-size:13px; color:#9FD6C9; margin-bottom:22px;}
+.j-step h3{font-family:'Fraunces', serif; font-weight:450; font-size:21px; margin-bottom:10px; color:#fff;}
+.j-step p{font-size:14px; color:#CFE0DC; line-height:1.55;}
+
+/* ---------- SHOWCASE (screens) ---------- */
+.tabs{display:flex; gap:8px; margin-bottom:34px; flex-wrap:wrap;}
+.tab-btn{
+  font-family:'IBM Plex Mono', monospace; font-size:12.5px; padding:9px 16px; border-radius:999px;
+  border:1px solid var(--line); background:#fff; cursor:pointer; color:var(--ink-soft); font-weight:500;
+  transition:all .18s ease;
+}
+.tab-btn.active{background:var(--ink); color:var(--paper); border-color:var(--ink);}
+.browser-frame{
+  background:#fff; border:1px solid var(--line); border-radius:16px; box-shadow:var(--shadow); overflow:hidden;
+}
+.browser-bar{display:flex; align-items:center; gap:8px; padding:13px 16px; border-bottom:1px solid var(--line); background:var(--paper-dim);}
+.dot{width:9px; height:9px; border-radius:50%; background:var(--line);}
+.browser-url{margin-left:14px; font-family:'IBM Plex Mono', monospace; font-size:11.5px; color:var(--ink-soft); background:#fff; padding:5px 12px; border-radius:6px; border:1px solid var(--line);}
+.screen{padding:36px; min-height:380px;}
+.screen-grid{display:grid; grid-template-columns:1.3fr .9fr; gap:24px;}
+.panel{border:1px solid var(--line); border-radius:12px; padding:22px; background:var(--paper);}
+.panel h4{font-size:14px; margin-bottom:16px; font-weight:600;}
+.finding{display:flex; justify-content:space-between; padding:10px 0; border-top:1px solid var(--paper-dim); font-size:13.5px;}
+.finding:first-of-type{border-top:none;}
+.finding .lbl{color:var(--ink-soft);}
+.finding .delta{font-family:'IBM Plex Mono', monospace; font-weight:600;}
+.delta.up{color:var(--coral);}
+.delta.ok{color:var(--teal-deep);}
+.chat-bubble{background:var(--teal-tint); border-radius:12px; padding:14px 16px; font-size:13.5px; line-height:1.55; margin-bottom:12px; max-width:88%;}
+.chat-bubble.user{background:var(--paper-dim); margin-left:auto;}
+.cite{font-family:'IBM Plex Mono', monospace; font-size:10.5px; color:var(--teal-deep); background:#fff; padding:2px 7px; border-radius:6px; border:1px solid var(--line); margin-left:6px;}
+.mini-chart{width:100%; height:120px;}
+.hidden-screen{display:none;}
+
+/* ---------- TRUST ---------- */
+.trust{display:grid; grid-template-columns:repeat(3,1fr); gap:1px; background:var(--line); border:1px solid var(--line); border-radius:var(--radius); overflow:hidden;}
+.trust-item{background:var(--paper); padding:32px 28px;}
+.trust-item svg{margin-bottom:18px;}
+.trust-item h3{font-family:'Fraunces', serif; font-weight:500; font-size:19px; margin-bottom:9px;}
+.trust-item p{font-size:14px; color:var(--ink-soft); line-height:1.6;}
+
+/* ---------- CTA ---------- */
+.cta-band{background:var(--ink); color:var(--paper); text-align:center; padding:110px 0;}
+.cta-band .eyebrow{color:#9FD6C9; justify-content:center;}
+.cta-band .eyebrow::before{background:#9FD6C9;}
+.cta-band h2{font-size:clamp(32px,4.4vw,52px); margin:18px 0 30px; max-width:640px; margin-left:auto; margin-right:auto;}
+.cta-band .hero-ctas{justify-content:center;}
+.cta-band .btn-primary{background:var(--teal); color:#fff;}
+.cta-band .btn-primary:hover{background:var(--teal-deep);}
+.cta-band .btn-ghost{border-color:rgba(251,248,243,.3); color:var(--paper);}
+
+/* ---------- FOOTER ---------- */
+footer{padding:48px 0; border-top:1px solid var(--line);}
+.footer-inner{display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:16px;}
+.footer-links{display:flex; gap:26px; font-size:13.5px; color:var(--ink-soft);}
+.footer-note{font-family:'IBM Plex Mono', monospace; font-size:11.5px; color:var(--ink-soft);}
+
+@media (max-width:880px){
+  .hero-grid{grid-template-columns:1fr;}
+  .hero-visual{height:340px;}
+  .j-grid{grid-template-columns:1fr 1fr;}
+  .trust{grid-template-columns:1fr;}
+  .screen-grid{grid-template-columns:1fr;}
+  .nav-links{display:none;}
+}
+@media (prefers-reduced-motion: reduce){
+  .pulse-path, .float-card{animation:none !important; stroke-dashoffset:0; opacity:1; transform:none;}
+}
+</style>
+</head>
+<body>
+
+<nav>
+  <div class="nav-inner">
+    <div class="logo">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none"><path d="M2 12h5l2-7 4 14 3-10 2 3h4" stroke="#0E6F64" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      Vitalis
+    </div>
+    <div class="nav-links">
+      <a href="#journey">How it works</a>
+      <a href="#showcase">Product</a>
+      <a href="#trust">Security</a>
+      <a href="#">For clinicians</a>
+    </div>
+    <div class="nav-cta">
+      <a href="#" class="btn btn-ghost">Sign in</a>
+      <a href="#" class="btn btn-primary">Get started</a>
+    </div>
+  </div>
+</nav>
+
+<header class="hero">
+  <div class="wrap hero-grid">
+    <div>
+      <div class="eyebrow">Personal health intelligence</div>
+      <h1>Every result,<br><em>understood.</em></h1>
+      <p class="sub">Upload any blood test, scan, or discharge summary. Vitalis reads it, tracks it against your history, and explains exactly what changed — in your language, or your doctor's.</p>
+      <div class="hero-ctas">
+        <a href="#" class="btn btn-primary">Upload your first report</a>
+        <a href="#journey" class="link-arrow">See how it works
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M5 12h14M13 6l6 6-6 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </a>
+      </div>
+      <div class="trust-row">
+        <span><span class="trust-dot"></span>Encrypted end to end</span>
+        <span><span class="trust-dot"></span>Role-based access</span>
+        <span><span class="trust-dot"></span>You control every share</span>
+      </div>
+    </div>
+
+    <div class="hero-visual">
+      <svg class="pulse-svg" viewBox="0 0 480 460" preserveAspectRatio="none">
+        <path class="pulse-path" d="M0 360 L70 360 L95 300 L120 400 L145 260 L170 360 L480 360" />
+      </svg>
+      <div class="float-card card-report">
+        <div class="report-head">
+          <span class="report-title">Lipid Panel — Aug 2026</span>
+          <span class="badge badge-watch">Watch</span>
+        </div>
+        <div class="report-row"><span class="rr-label">LDL Cholesterol</span><span class="rr-val flag">165 mg/dL ↑</span></div>
+        <div class="report-row"><span class="rr-label">HDL Cholesterol</span><span class="rr-val">58 mg/dL</span></div>
+        <div class="report-row"><span class="rr-label">Triglycerides</span><span class="rr-val">120 mg/dL</span></div>
+      </div>
+      <div class="float-card card-chip">
+        <div class="chip-line">
+          <div class="chip-avatar">V</div>
+          <div class="chip-text"><strong>Your LDL rose 12%</strong> since May. Still worth a conversation at your next visit.</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</header>
+
+<div class="divider">
+  <svg viewBox="0 0 1200 52" preserveAspectRatio="none"><path d="M0 26 L400 26 L420 8 L440 44 L460 26 L1200 26" stroke="#DCE3DC" stroke-width="1.5" fill="none"/></svg>
+</div>
+
+<section class="journey" id="journey">
+  <div class="wrap">
+    <div class="section-head">
+      <div class="eyebrow">The path every report takes</div>
+      <h2 style="color:#fff;">From upload to understanding, in four steps.</h2>
+      <p>This is the actual sequence Vitalis runs on every document — not a marketing flourish, the real pipeline.</p>
+    </div>
+    <div class="j-grid">
+      <div class="j-step">
+        <div class="j-num">01 / Upload</div>
+        <h3>Drop it in</h3>
+        <p>Blood tests, prescriptions, MRI, CT, discharge summaries — PDF, photo, or DICOM. We sort the type for you.</p>
+      </div>
+      <div class="j-step">
+        <div class="j-num">02 / Extract</div>
+        <h3>We read it</h3>
+        <p>OCR and medical-language models pull out every value, range, and medication — you confirm anything uncertain.</p>
+      </div>
+      <div class="j-step">
+        <div class="j-num">03 / Understand</div>
+        <h3>Two summaries</h3>
+        <p>A clinical brief for your doctor, and a plain-language explanation for you — generated from the same data.</p>
+      </div>
+      <div class="j-step">
+        <div class="j-num">04 / Track</div>
+        <h3>Watch it over time</h3>
+        <p>Every new report joins your timeline, compared automatically against what came before.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="showcase">
+  <div class="wrap">
+    <div class="section-head">
+      <div class="eyebrow">Inside the product</div>
+      <h2>One record. Two audiences.</h2>
+      <p>The same data, shaped for how you and your doctor each actually need to read it.</p>
+    </div>
+
+    <div class="tabs">
+      <button class="tab-btn active" data-tab="patient">Patient view</button>
+      <button class="tab-btn" data-tab="doctor">Doctor view</button>
+      <button class="tab-btn" data-tab="trends">Trends</button>
+      <button class="tab-btn" data-tab="chat">Ask Vitalis</button>
+    </div>
+
+    <div class="browser-frame">
+      <div class="browser-bar">
+        <span class="dot"></span><span class="dot"></span><span class="dot"></span>
+        <span class="browser-url">app.vitalis.health/records</span>
+      </div>
+
+      <div class="screen" id="screen-patient">
+        <div class="screen-grid">
+          <div class="panel">
+            <h4>What your LDL result means</h4>
+            <p style="font-size:13.5px; color:var(--ink-soft); line-height:1.6; margin-bottom:16px;">LDL carries cholesterol through your blood and, at higher levels, can build up in artery walls over time. Yours came in a bit above the healthy range.</p>
+            <div class="finding"><span class="lbl">This result</span><span class="delta up">165 mg/dL</span></div>
+            <div class="finding"><span class="lbl">Healthy range</span><span class="delta ok">&lt; 130 mg/dL</span></div>
+            <div class="finding"><span class="lbl">Since your last test</span><span class="delta up">↑ 12%</span></div>
+          </div>
+          <div class="panel">
+            <h4>Ask your doctor</h4>
+            <p style="font-size:13px; color:var(--ink-soft); line-height:1.7;">• Should we recheck this in 3 months?<br>• Would a diet change help first?<br>• Is a statin worth discussing now?</p>
+          </div>
+        </div>
+      </div>
+
+      <div class="screen hidden-screen" id="screen-doctor">
+        <div class="panel" style="max-width:560px;">
+          <h4>Clinical summary — Priya Sharma, 41F</h4>
+          <div class="finding"><span class="lbl">LDL-C</span><span class="delta up">165 mg/dL, ↑12% vs. 3mo prior — above ref. range (130)</span></div>
+          <div class="finding"><span class="lbl">HDL-C</span><span class="delta ok">58 mg/dL — within range</span></div>
+          <div class="finding"><span class="lbl">Active meds</span><span class="delta ok">No lipid-lowering agent on file</span></div>
+          <div class="finding"><span class="lbl">Suggested</span><span class="delta ok">Consider recheck in 3mo; diet/statin discussion</span></div>
+        </div>
+      </div>
+
+      <div class="screen hidden-screen" id="screen-trends">
+        <div class="panel">
+          <h4>LDL Cholesterol — last 12 months</h4>
+          <svg class="mini-chart" viewBox="0 0 600 120" preserveAspectRatio="none">
+            <rect x="0" y="70" width="600" height="30" fill="#E7EEE7"/>
+            <polyline points="0,85 100,80 200,78 300,60 400,45 500,30 600,20" fill="none" stroke="#0E6F64" stroke-width="2.5"/>
+            <circle cx="600" cy="20" r="5" fill="#E1583F"/>
+          </svg>
+          <p style="font-size:12px; color:var(--ink-soft); margin-top:6px;">Shaded band = healthy range · red point = today's flagged result</p>
+        </div>
+      </div>
+
+      <div class="screen hidden-screen" id="screen-chat">
+        <div class="panel" style="max-width:520px;">
+          <div class="chat-bubble user">What were my last three LDL readings?</div>
+          <div class="chat-bubble">Your last three LDL results were 165, 147, and 138 mg/dL, from Aug, May, and Feb 2026<span class="cite">Lipid Panel, Aug 12</span>. That's a steady upward trend — worth flagging to your doctor.</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="trust">
+  <div class="wrap">
+    <div class="section-head">
+      <div class="eyebrow">Built for health data, not around it</div>
+      <h2>Your records stay yours.</h2>
+      <p>Every design decision starts from the fact that this is the most sensitive data you have.</p>
+    </div>
+    <div class="trust">
+      <div class="trust-item">
+        <svg width="26" height="26" viewBox="0 0 24 24" fill="none"><rect x="4" y="10" width="16" height="10" rx="2" stroke="#0E6F64" stroke-width="1.8"/><path d="M8 10V7a4 4 0 018 0v3" stroke="#0E6F64" stroke-width="1.8"/></svg>
+        <h3>Encrypted, always</h3>
+        <p>TLS in transit, AES-256 at rest. Nothing about your health leaves your device unprotected.</p>
+      </div>
+      <div class="trust-item">
+        <svg width="26" height="26" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="8" r="3.5" stroke="#0E6F64" stroke-width="1.8"/><path d="M4 20c0-4 3.5-6 8-6s8 2 8 6" stroke="#0E6F64" stroke-width="1.8"/></svg>
+        <h3>You choose who sees what</h3>
+        <p>Grant a doctor access to specific reports, or all of them — and revoke it instantly, any time.</p>
+      </div>
+      <div class="trust-item">
+        <svg width="26" height="26" viewBox="0 0 24 24" fill="none"><path d="M12 3l7 4v5c0 5-3.5 7.5-7 9-3.5-1.5-7-4-7-9V7l7-4z" stroke="#0E6F64" stroke-width="1.8"/></svg>
+        <h3>Every access, logged</h3>
+        <p>An immutable audit trail records who viewed what and when — visible to you, not just us.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="cta-band">
+  <div class="wrap">
+    <div class="eyebrow">Start with your next report</div>
+    <h2>Stop reading lab results alone.</h2>
+    <div class="hero-ctas">
+      <a href="#" class="btn btn-primary">Upload your first report</a>
+      <a href="#" class="btn btn-ghost">Talk to our team</a>
+    </div>
+  </div>
+</section>
+
+<footer>
+  <div class="wrap footer-inner">
+    <div class="logo" style="font-size:16px;">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M2 12h5l2-7 4 14 3-10 2 3h4" stroke="#0E6F64" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      Vitalis
+    </div>
+    <div class="footer-links">
+      <a href="#">Privacy</a>
+      <a href="#">Security</a>
+      <a href="#">For clinicians</a>
+      <a href="#">Contact</a>
+    </div>
+    <div class="footer-note">© 2026 Vitalis Health — Informational only, not a substitute for medical advice.</div>
+  </div>
+</footer>
+
+<script>
+document.querySelectorAll('.tab-btn').forEach(btn=>{
+  btn.addEventListener('click', ()=>{
+    document.querySelectorAll('.tab-btn').forEach(b=>b.classList.remove('active'));
+    btn.classList.add('active');
+    document.querySelectorAll('[id^="screen-"]').forEach(s=>s.classList.add('hidden-screen'));
+    document.getElementById('screen-'+btn.dataset.tab).classList.remove('hidden-screen');
+  });
+});
+</script>
+</body>
+</html>
