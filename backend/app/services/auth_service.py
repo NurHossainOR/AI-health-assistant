@@ -100,7 +100,7 @@ async def register_user(
         db.add(
             DoctorProfile(
                 user_id=user.id,
-                npi_number=data.npi_number,
+                bmdc_registration_number=data.bmdc_registration_number,
                 specialty=data.specialty,
             )
         )

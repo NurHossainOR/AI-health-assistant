@@ -103,7 +103,7 @@ class DoctorProfile(Base):
     user_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), primary_key=True
     )
-    npi_number: Mapped[Optional[str]] = mapped_column(String(20), nullable=True, index=True)
+    bmdc_registration_number: Mapped[Optional[str]] = mapped_column(String(20), nullable=True, index=True)
     specialty: Mapped[Optional[str]] = mapped_column(String(128), nullable=True)
     verified_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
     verified_by: Mapped[Optional[uuid.UUID]] = mapped_column(

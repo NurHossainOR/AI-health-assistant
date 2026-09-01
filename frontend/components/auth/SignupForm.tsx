@@ -45,7 +45,7 @@ export function SignupForm() {
           password,
           full_name: fullName,
           role,
-          npi_number: role === 'doctor' ? npi || null : null,
+          bmdc_registration_number: role === 'doctor' ? npi || null : null,
           specialty: role === 'doctor' ? specialty || null : null,
         }),
       })

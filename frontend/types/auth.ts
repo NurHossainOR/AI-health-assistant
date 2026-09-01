@@ -58,7 +58,7 @@ export interface AuditLog {
 }
 
 export interface AdminUser extends User {
-  npi_number?: string | null
+  bmdc_registration_number?: string | null
   specialty?: string | null
   verified_at?: string | null
 }

@@ -277,7 +277,7 @@ Each step is idempotent and retried with exponential backoff; failures land in a
 users (id, email, password_hash, full_name, role, mfa_enabled, created_at, ...)
 roles (id, name)                      -- patient, doctor, caregiver, admin
 patient_profiles (user_id FK, dob, sex, height, weight, allergies, ...)
-doctor_profiles (user_id FK, npi_number, specialty, verified_at, ...)
+doctor_profiles (user_id FK, bmdc_registration_number, specialty, verified_at, ...)
 
 -- Consent / Sharing
 consent_grants (id, patient_id FK, grantee_id FK, scope, granted_at, revoked_at)

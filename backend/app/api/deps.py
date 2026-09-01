@@ -120,12 +120,12 @@ async def list_users_admin(
         if u.role == UserRole.doctor:
             dp = await db.get(DoctorProfile, u.id)
             if dp:
-                npi, specialty, verified_at = dp.npi_number, dp.specialty, dp.verified_at
+                npi, specialty, verified_at = dp.bmdc_registration_number, dp.specialty, dp.verified_at
         base = UserOut.model_validate(u)
         outs.append(
             AdminUserOut(
                 **base.model_dump(),
-                npi_number=npi,
+                bmdc_registration_number=npi,
                 specialty=specialty,
                 verified_at=verified_at,
             )
@@ -158,12 +158,12 @@ async def approve_doctor(
         resource_type="user",
         resource_id=str(doctor.id),
         ip_address=ip_address,
-        metadata={"npi": profile.npi_number if profile else None},
+        metadata={"npi": profile.bmdc_registration_number if profile else None},
     )
     base = UserOut.model_validate(doctor)
     return AdminUserOut(
         **base.model_dump(),
-        npi_number=profile.npi_number if profile else None,
+        bmdc_registration_number=profile.bmdc_registration_number if profile else None,
         specialty=profile.specialty if profile else None,
         verified_at=profile.verified_at if profile else None,
     )

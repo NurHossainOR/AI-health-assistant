@@ -12,7 +12,7 @@ class RegisterRequest(BaseModel):
     password: str = Field(min_length=8, max_length=128)
     full_name: str = Field(min_length=1, max_length=255)
     role: UserRole = UserRole.patient
-    npi_number: Optional[str] = Field(default=None, max_length=20)
+    bmdc_registration_number: Optional[str] = Field(default=None, max_length=20)
     specialty: Optional[str] = Field(default=None, max_length=128)
 
 
@@ -109,7 +109,7 @@ class AuditLogOut(BaseModel):
 
 
 class AdminUserOut(UserOut):
-    npi_number: Optional[str] = None
+    bmdc_registration_number: Optional[str] = None
     specialty: Optional[str] = None
     verified_at: Optional[datetime] = None
 
