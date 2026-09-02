@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, type ReactNode } from 'react'
 import Link from 'next/link'
 import { apiFetch } from '@/lib/api'
 import type { AdminUser, AuditLog, PipelineHealth, UserStatus } from '@/types/auth'
@@ -150,9 +150,215 @@ function PipelineHealthDashboard({ health }: { health: PipelineHealth | null }) 
   )
 }
 
+function doctorLabel(u: AdminUser) {
+  if (u.bmdc_registration_number) return `${u.full_name} (BMDC ${u.bmdc_registration_number})`
+  return u.full_name
+}
+
+function DoctorVerification() {
+  const [pending, setPending] = useState<AdminUser[]>([])
+  const [verified, setVerified] = useState<AdminUser[]>([])
+  const [rejected, setRejected] = useState<AdminUser[]>([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+  const [busyId, setBusyId] = useState<string | null>(null)
+
+  async function load() {
+    setLoading(true)
+    setError(null)
+    try {
+      const [pendingDoctors, verifiedDoctors, rejectedDoctors] = await Promise.all([
+        apiFetch<AdminUser[]>('/api/v1/admin/users?role=doctor&status=pending_verification'),
+        apiFetch<AdminUser[]>('/api/v1/admin/users?role=doctor&status=active'),
+        apiFetch<AdminUser[]>('/api/v1/admin/users?role=doctor&status=suspended'),
+      ])
+      setPending(pendingDoctors)
+      setVerified(verifiedDoctors)
+      setRejected(rejectedDoctors)
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Failed to load doctors')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  useEffect(() => {
+    void load()
+  }, [])
+
+  async function decide(id: string, action: 'approve' | 'reject') {
+    setBusyId(id)
+    setError(null)
+    try {
+      await apiFetch(
+        `/api/v1/admin/users/${id}/${action === 'approve' ? 'approve-doctor' : 'reject-doctor'}`,
+        { method: 'POST' },
+      )
+      await load()
+    } catch (e) {
+      setError(e instanceof Error ? e.message : `Failed to ${action} doctor`)
+    } finally {
+      setBusyId(null)
+    }
+  }
+
+  return (
+    <div className="panel">
+      <div style={{ marginBottom: '1.5rem' }}>
+        <div className="eyebrow" style={{ marginBottom: '0.5rem' }}>Verification</div>
+        <h3 style={{ margin: 0 }}>Doctor verification</h3>
+        <p style={{ color: 'var(--ink-soft)', fontSize: '14px', marginTop: '0.5rem' }}>
+          Approve or reject doctor accounts. Only verified doctors appear in the patient sharing list.
+        </p>
+      </div>
+
+      {error && <p className="form-error">{error}</p>}
+
+      {loading ? (
+        <div className="loading">Loading doctors…</div>
+      ) : (
+        <>
+          <h4 style={{ fontSize: '14px', marginBottom: '0.75rem' }}>
+            Pending approval ({pending.length})
+          </h4>
+          <DoctorTable
+            doctors={pending}
+            empty="No doctors waiting for verification."
+            actions={(u) => (
+              <>
+                <button
+                  type="button"
+                  className="btn btn-teal"
+                  style={{ fontSize: '12px', padding: '6px 12px' }}
+                  disabled={busyId === u.id}
+                  onClick={() => void decide(u.id, 'approve')}
+                >
+                  Approve
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-danger"
+                  style={{ fontSize: '12px', padding: '6px 12px' }}
+                  disabled={busyId === u.id}
+                  onClick={() => void decide(u.id, 'reject')}
+                >
+                  Reject
+                </button>
+              </>
+            )}
+          />
+
+          <h4 style={{ fontSize: '14px', margin: '1.5rem 0 0.75rem' }}>
+            Verified — visible to patients ({verified.length})
+          </h4>
+          <DoctorTable
+            doctors={verified}
+            empty="No verified doctors yet. Approved doctors will appear here and in the patient sharing dropdown."
+            actions={(u) => (
+              <button
+                type="button"
+                className="btn btn-ghost"
+                style={{ fontSize: '12px', padding: '6px 12px' }}
+                disabled={busyId === u.id}
+                onClick={() => void decide(u.id, 'reject')}
+              >
+                Revoke
+              </button>
+            )}
+          />
+
+          {rejected.length > 0 && (
+            <>
+              <h4 style={{ fontSize: '14px', margin: '1.5rem 0 0.75rem' }}>
+                Rejected ({rejected.length})
+              </h4>
+              <DoctorTable
+                doctors={rejected}
+                empty=""
+                actions={(u) => (
+                  <button
+                    type="button"
+                    className="btn btn-teal"
+                    style={{ fontSize: '12px', padding: '6px 12px' }}
+                    disabled={busyId === u.id}
+                    onClick={() => void decide(u.id, 'approve')}
+                  >
+                    Approve
+                  </button>
+                )}
+              />
+            </>
+          )}
+        </>
+      )}
+    </div>
+  )
+}
+
+function DoctorTable({
+  doctors,
+  empty,
+  actions,
+}: {
+  doctors: AdminUser[]
+  empty: string
+  actions: (u: AdminUser) => ReactNode
+}) {
+  return (
+    <div style={{ overflowX: 'auto' }}>
+      <table className="data-table">
+        <thead>
+          <tr>
+            <th>Doctor</th>
+            <th>Email</th>
+            <th>BMDC</th>
+            <th>Specialty</th>
+            <th>Status</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>
+          {doctors.length === 0 ? (
+            <tr>
+              <td colSpan={6} style={{ textAlign: 'center', color: 'var(--ink-soft)' }}>
+                {empty}
+              </td>
+            </tr>
+          ) : (
+            doctors.map((u) => (
+              <tr key={u.id}>
+                <td style={{ fontWeight: 500 }}>{doctorLabel(u)}</td>
+                <td style={{ color: 'var(--ink-soft)' }}>{u.email}</td>
+                <td className="mono">{u.bmdc_registration_number || '—'}</td>
+                <td>{u.specialty || '—'}</td>
+                <td>
+                  <span
+                    className={`badge ${
+                      u.status === 'active'
+                        ? 'badge-normal'
+                        : u.status === 'pending_verification'
+                          ? 'badge-pending'
+                          : 'badge-watch'
+                    }`}
+                  >
+                    {u.status === 'suspended' ? 'rejected' : u.status.replaceAll('_', ' ')}
+                  </span>
+                </td>
+                <td>
+                  <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>{actions(u)}</div>
+                </td>
+              </tr>
+            ))
+          )}
+        </tbody>
+      </table>
+    </div>
+  )
+}
+
 function UserManagement() {
   const [users, setUsers] = useState<AdminUser[]>([])
-  const [statusFilter, setStatusFilter] = useState<UserStatus | ''>('pending_verification')
+  const [statusFilter, setStatusFilter] = useState<UserStatus | ''>('')
   const [loading, setLoading] = useState(true)
 
   async function loadUsers() {
@@ -204,6 +410,7 @@ function UserManagement() {
                 <th>Name</th>
                 <th>Email</th>
                 <th>Role</th>
+                <th>BMDC</th>
                 <th>Status</th>
                 <th></th>
               </tr>
@@ -211,7 +418,7 @@ function UserManagement() {
             <tbody>
               {users.length === 0 ? (
                 <tr>
-                  <td colSpan={5} style={{ textAlign: 'center', color: 'var(--ink-soft)' }}>
+                  <td colSpan={6} style={{ textAlign: 'center', color: 'var(--ink-soft)' }}>
                     No users found
                   </td>
                 </tr>
@@ -223,6 +430,7 @@ function UserManagement() {
                     <td>
                       <span className="badge badge-normal">{u.role}</span>
                     </td>
+                    <td className="mono">{u.bmdc_registration_number || '—'}</td>
                     <td>
                       <span className={`badge ${u.status === 'active' ? 'badge-normal' : u.status === 'pending_verification' ? 'badge-pending' : 'badge-watch'}`}>
                         {u.status}
@@ -230,14 +438,16 @@ function UserManagement() {
                     </td>
                     <td>
                       {u.role === 'doctor' && u.status === 'pending_verification' && (
-                        <button 
-                          type="button" 
-                          className="btn btn-teal"
-                          style={{ fontSize: '12px', padding: '6px 12px' }}
-                          onClick={() => void approveDoctor(u.id)}
-                        >
-                          Approve
-                        </button>
+                        <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
+                          <button
+                            type="button"
+                            className="btn btn-teal"
+                            style={{ fontSize: '12px', padding: '6px 12px' }}
+                            onClick={() => void approveDoctor(u.id)}
+                          >
+                            Approve
+                          </button>
+                        </div>
                       )}
                     </td>
                   </tr>
@@ -281,10 +491,11 @@ export function AdminConsole() {
           <div>
             <div className="eyebrow">Administration</div>
             <h1>Admin console</h1>
-            <p className="muted">Manage users, review audit logs, and monitor system health.</p>
+            <p className="muted">Verify doctors, manage users, review audit logs, and monitor system health.</p>
           </div>
         </header>
 
+        <DoctorVerification />
         <UserManagement />
         <PipelineHealthDashboard health={health} />
         <AuditLogViewer />

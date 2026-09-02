@@ -11,6 +11,7 @@ from app.api.deps import (
     list_users_admin,
     pipeline_health,
     query_audit_logs,
+    reject_doctor,
     require_role,
 )
 from app.db.session import get_db
@@ -38,6 +39,16 @@ async def approve_doctor_endpoint(
     admin: Annotated[User, Depends(require_role(["admin"]))],
 ) -> AdminUserOut:
     return await approve_doctor(db, admin, user_id, ip_address=client_ip(request))
+
+
+@router.post("/users/{user_id}/reject-doctor", response_model=AdminUserOut)
+async def reject_doctor_endpoint(
+    user_id: UUID,
+    request: Request,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    admin: Annotated[User, Depends(require_role(["admin"]))],
+) -> AdminUserOut:
+    return await reject_doctor(db, admin, user_id, ip_address=client_ip(request))
 
 
 @router.get("/audit-logs", response_model=list[AuditLogOut])

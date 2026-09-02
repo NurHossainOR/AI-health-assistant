@@ -10,7 +10,7 @@ from jose import JWTError
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.exceptions import raise_forbidden, raise_unauthorized
+from app.core.exceptions import AppError, raise_forbidden, raise_unauthorized
 from app.core.security import decode_token
 from app.db.session import get_db
 from app.models.user import AuditLog, DoctorProfile, IngestionJob, User, UserRole, UserStatus
@@ -116,21 +116,35 @@ async def list_users_admin(
     users = result.scalars().all()
     outs: list[AdminUserOut] = []
     for u in users:
-        npi = specialty = verified_at = None
+        bmdc_registration_number = specialty = verified_at = None
         if u.role == UserRole.doctor:
             dp = await db.get(DoctorProfile, u.id)
             if dp:
-                npi, specialty, verified_at = dp.bmdc_registration_number, dp.specialty, dp.verified_at
+                bmdc_registration_number, specialty, verified_at = (
+                    dp.bmdc_registration_number,
+                    dp.specialty,
+                    dp.verified_at,
+                )
         base = UserOut.model_validate(u)
         outs.append(
             AdminUserOut(
                 **base.model_dump(),
-                bmdc_registration_number=npi,
+                bmdc_registration_number=bmdc_registration_number,
                 specialty=specialty,
                 verified_at=verified_at,
             )
         )
     return outs
+
+
+def _admin_doctor_out(doctor: User, profile: DoctorProfile | None) -> AdminUserOut:
+    base = UserOut.model_validate(doctor)
+    return AdminUserOut(
+        **base.model_dump(),
+        bmdc_registration_number=profile.bmdc_registration_number if profile else None,
+        specialty=profile.specialty if profile else None,
+        verified_at=profile.verified_at if profile else None,
+    )
 
 
 async def approve_doctor(
@@ -143,10 +157,12 @@ async def approve_doctor(
     doctor = await get_user_by_id(db, doctor_id)
     if not doctor or doctor.role != UserRole.doctor:
         raise_forbidden("Not a doctor account")
+    profile = await db.get(DoctorProfile, doctor.id)
+    if doctor.status == UserStatus.active and profile and profile.verified_at:
+        raise AppError("Doctor is already verified", status_code=400, code="already_verified")
 
     doctor.status = UserStatus.active
     doctor.email_verified = True
-    profile = await db.get(DoctorProfile, doctor.id)
     if profile:
         profile.verified_at = datetime.now(timezone.utc)
         profile.verified_by = admin.id
@@ -158,15 +174,40 @@ async def approve_doctor(
         resource_type="user",
         resource_id=str(doctor.id),
         ip_address=ip_address,
-        metadata={"npi": profile.bmdc_registration_number if profile else None},
+        metadata={"bmdc_registration_number": profile.bmdc_registration_number if profile else None},
     )
-    base = UserOut.model_validate(doctor)
-    return AdminUserOut(
-        **base.model_dump(),
-        bmdc_registration_number=profile.bmdc_registration_number if profile else None,
-        specialty=profile.specialty if profile else None,
-        verified_at=profile.verified_at if profile else None,
+    return _admin_doctor_out(doctor, profile)
+
+
+async def reject_doctor(
+    db: AsyncSession,
+    admin: User,
+    doctor_id: UUID,
+    *,
+    ip_address: Optional[str] = None,
+) -> AdminUserOut:
+    doctor = await get_user_by_id(db, doctor_id)
+    if not doctor or doctor.role != UserRole.doctor:
+        raise_forbidden("Not a doctor account")
+    if doctor.status == UserStatus.suspended:
+        raise AppError("Doctor is already rejected", status_code=400, code="already_rejected")
+
+    doctor.status = UserStatus.suspended
+    profile = await db.get(DoctorProfile, doctor.id)
+    if profile:
+        profile.verified_at = None
+        profile.verified_by = None
+    await db.flush()
+    await write_audit_log(
+        db,
+        actor_id=admin.id,
+        action="admin.doctor_rejected",
+        resource_type="user",
+        resource_id=str(doctor.id),
+        ip_address=ip_address,
+        metadata={"bmdc_registration_number": profile.bmdc_registration_number if profile else None},
     )
+    return _admin_doctor_out(doctor, profile)
 
 
 async def query_audit_logs(
