@@ -12,6 +12,7 @@ export type ConsentScope =
   | 'imaging'
   | 'prescriptions'
   | 'discharge'
+  | 'document'
 
 export interface User {
   id: string
@@ -55,6 +56,13 @@ export interface AuditLog {
   ip_address: string | null
   metadata: Record<string, unknown> | null
   created_at: string
+}
+
+export interface VerifiedDoctor {
+  id: string
+  full_name: string
+  bmdc_registration_number?: string | null
+  specialty?: string | null
 }
 
 export interface AdminUser extends User {

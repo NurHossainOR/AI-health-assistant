@@ -2,7 +2,7 @@ from datetime import datetime
 from typing import Any, Optional
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, EmailStr, Field
+from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
 
 from app.models.user import ConsentScope, UserRole, UserStatus
 
@@ -63,7 +63,7 @@ class UserOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     id: UUID
-    email: EmailStr
+    email: str
     full_name: str
     role: UserRole
     status: UserStatus
@@ -74,9 +74,16 @@ class UserOut(BaseModel):
 
 class ConsentGrantCreate(BaseModel):
     grantee_id: UUID
-    scope: ConsentScope = ConsentScope.all
+    scope: ConsentScope = ConsentScope.document
     scope_detail: Optional[dict[str, Any]] = None
     expires_at: Optional[datetime] = None
+
+
+class VerifiedDoctorOut(BaseModel):
+    id: UUID
+    full_name: str
+    bmdc_registration_number: Optional[str] = None
+    specialty: Optional[str] = None
 
 
 class ConsentGrantOut(BaseModel):
@@ -106,6 +113,11 @@ class AuditLogOut(BaseModel):
     ip_address: Optional[str]
     metadata: Optional[dict[str, Any]] = Field(default=None, validation_alias="metadata_")
     created_at: datetime
+
+    @field_validator("ip_address", mode="before")
+    @classmethod
+    def _ip_to_str(cls, value: Any) -> Optional[str]:
+        return None if value is None else str(value)
 
 
 class AdminUserOut(UserOut):

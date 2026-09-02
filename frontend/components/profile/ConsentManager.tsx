@@ -1,50 +1,56 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { apiFetch } from '@/lib/api'
-import type { ConsentGrant, ConsentScope } from '@/types/auth'
+import type { ConsentGrant, VerifiedDoctor } from '@/types/auth'
+import type { HealthDocument } from '@/types/documents'
+import {
+  DOC_TYPE_LABELS,
+  SHAREABLE_STATUSES,
+  documentDisplayName,
+  documentShareLabel,
+} from '@/types/documents'
 
-const SCOPES: ConsentScope[] = ['all', 'labs', 'imaging', 'prescriptions', 'discharge']
+function doctorOptionLabel(d: VerifiedDoctor) {
+  return d.bmdc_registration_number
+    ? `${d.full_name} (BMDC ${d.bmdc_registration_number})`
+    : d.full_name
+}
 
-const SCOPE_LABELS: Record<ConsentScope, { label: string; includes: string[] }> = {
-  all: {
-    label: 'All health records',
-    includes: ['Labs', 'Imaging', 'Prescriptions', 'Discharge summaries', 'Alerts'],
-  },
-  labs: { label: 'Lab results only', includes: ['Lab results and trends'] },
-  imaging: { label: 'Imaging only', includes: ['MRI/CT studies and findings'] },
-  prescriptions: {
-    label: 'Prescriptions only',
-    includes: ['Medication names, dosages, frequency'],
-  },
-  discharge: {
-    label: 'Discharge summaries only',
-    includes: ['Diagnoses, procedures, follow-up instructions'],
-  },
+function grantLabel(g: ConsentGrant) {
+  return g.preview?.label ?? (g.scope === 'document' ? 'Shared document' : g.scope)
 }
 
 export function ConsentManager() {
   const [grants, setGrants] = useState<ConsentGrant[]>([])
+  const [doctors, setDoctors] = useState<VerifiedDoctor[]>([])
+  const [documents, setDocuments] = useState<HealthDocument[]>([])
   const [granteeId, setGranteeId] = useState('')
-  const [scope, setScope] = useState<ConsentScope>('all')
-  const [preview, setPreview] = useState(SCOPE_LABELS.all)
+  const [documentId, setDocumentId] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [pending, setPending] = useState(false)
 
+  const shareable = useMemo(
+    () => documents.filter((d) => SHAREABLE_STATUSES.includes(d.status)),
+    [documents],
+  )
+
+  const selectedDoc = shareable.find((d) => d.id === documentId)
+
   async function load() {
-    const data = await apiFetch<ConsentGrant[]>('/api/v1/consent/grants')
-    setGrants(data)
+    const [grantData, doctorData, docData] = await Promise.all([
+      apiFetch<ConsentGrant[]>('/api/v1/consent/grants'),
+      apiFetch<VerifiedDoctor[]>('/api/v1/consent/doctors'),
+      apiFetch<HealthDocument[]>('/api/v1/documents'),
+    ])
+    setGrants(grantData)
+    setDoctors(doctorData)
+    setDocuments(docData)
   }
 
   useEffect(() => {
-    void load().catch((e) => setError(e.message))
+    void load().catch((e) => setError(e instanceof Error ? e.message : 'Failed to load sharing'))
   }, [])
-
-  useEffect(() => {
-    const match = grants.find((g) => g.scope === scope && g.preview)
-    if (match?.preview) setPreview(match.preview)
-    else setPreview(SCOPE_LABELS[scope])
-  }, [scope, grants])
 
   async function grantAccess() {
     setError(null)
@@ -52,9 +58,13 @@ export function ConsentManager() {
     try {
       await apiFetch('/api/v1/consent/grants', {
         method: 'POST',
-        body: JSON.stringify({ grantee_id: granteeId, scope }),
+        body: JSON.stringify({
+          grantee_id: granteeId,
+          scope: 'document',
+          scope_detail: { document_id: documentId },
+        }),
       })
-      setGranteeId('')
+      setDocumentId('')
       await load()
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to grant access')
@@ -69,6 +79,7 @@ export function ConsentManager() {
   }
 
   const activeGrants = grants.filter((g) => !g.revoked_at)
+  const canGrant = Boolean(granteeId && documentId) && !pending
 
   return (
     <section className="panel">
@@ -84,37 +95,55 @@ export function ConsentManager() {
 
       <div style={{ display: 'grid', gap: '1rem', marginBottom: '2rem' }}>
         <label>
-          Doctor user ID
-          <input 
-            value={granteeId} 
-            onChange={(e) => setGranteeId(e.target.value)} 
-            placeholder="Enter the doctor's user ID"
-          />
-        </label>
-        <label>
-          Scope
-          <select value={scope} onChange={(e) => setScope(e.target.value as ConsentScope)}>
-            {SCOPES.map((s) => (
-              <option key={s} value={s}>
-                {SCOPE_LABELS[s].label}
+          Doctor
+          <select value={granteeId} onChange={(e) => setGranteeId(e.target.value)} disabled={doctors.length === 0}>
+            <option value="">
+              {doctors.length === 0 ? 'No verified doctors yet' : 'Select a doctor'}
+            </option>
+            {doctors.map((d) => (
+              <option key={d.id} value={d.id}>
+                {doctorOptionLabel(d)}
               </option>
             ))}
           </select>
         </label>
-        
-        <div className="scope-preview">
-          <strong style={{ display: 'block', marginBottom: '0.5rem' }}>{preview.label}</strong>
-          <ul style={{ paddingLeft: '1.25rem', margin: 0, color: 'var(--ink-soft)' }}>
-            {preview.includes.map((item) => (
-              <li key={item} style={{ marginBottom: '0.25rem' }}>{item}</li>
+        <label>
+          Scope
+          <select
+            value={documentId}
+            onChange={(e) => setDocumentId(e.target.value)}
+            disabled={shareable.length === 0}
+          >
+            <option value="">
+              {shareable.length === 0
+                ? 'Upload a report first to share it'
+                : 'Select a document'}
+            </option>
+            {shareable.map((d) => (
+              <option key={d.id} value={d.id}>
+                {documentShareLabel(documentDisplayName(d), d.uploaded_at)}
+              </option>
             ))}
-          </ul>
-        </div>
-        
-        <button 
-          type="button" 
+          </select>
+        </label>
+
+        {selectedDoc && (
+          <div className="scope-preview">
+            <strong style={{ display: 'block', marginBottom: '0.5rem' }}>
+              {documentShareLabel(documentDisplayName(selectedDoc), selectedDoc.uploaded_at)}
+            </strong>
+            <ul style={{ paddingLeft: '1.25rem', margin: 0, color: 'var(--ink-soft)' }}>
+              <li style={{ marginBottom: '0.25rem' }}>
+                {DOC_TYPE_LABELS[selectedDoc.doc_type]}
+              </li>
+            </ul>
+          </div>
+        )}
+
+        <button
+          type="button"
           onClick={() => void grantAccess()}
-          disabled={!granteeId || pending}
+          disabled={!canGrant}
           style={{ maxWidth: '200px' }}
         >
           {pending ? 'Granting…' : 'Grant access'}
@@ -131,14 +160,16 @@ export function ConsentManager() {
               <li key={g.id}>
                 <div>
                   <strong>{g.grantee_name ?? g.grantee_id}</strong>
-                  <span className="badge badge-normal" style={{ marginLeft: '8px' }}>{g.scope}</span>
+                  <span className="badge badge-normal" style={{ marginLeft: '8px' }}>
+                    {grantLabel(g)}
+                  </span>
                   <span style={{ display: 'block', fontSize: '13px', color: 'var(--ink-soft)', marginTop: '4px' }}>
                     Since {new Date(g.granted_at).toLocaleDateString()}
                   </span>
                 </div>
-                <button 
-                  type="button" 
-                  className="btn btn-ghost" 
+                <button
+                  type="button"
+                  className="btn btn-ghost"
                   onClick={() => void revoke(g.id)}
                   style={{ fontSize: '13px', padding: '6px 12px' }}
                 >
