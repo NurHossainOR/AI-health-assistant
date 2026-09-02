@@ -74,3 +74,41 @@ export async function apiFetch<T>(
   }
   return data as T
 }
+
+export async function apiFetchBlob(
+  path: string,
+  options: RequestInit = {},
+  retry = true,
+): Promise<{ blob: Blob; filename: string | null }> {
+  const headers = new Headers(options.headers)
+  if (accessToken) {
+    headers.set('Authorization', `Bearer ${accessToken}`)
+  }
+  const res = await fetch(`${API_BASE}${path}`, {
+    ...options,
+    headers,
+    credentials: 'include',
+  })
+  if (res.status === 401 && retry && path !== '/api/v1/auth/refresh') {
+    try {
+      const refreshed = await apiFetch<{ access_token: string }>(
+        '/api/v1/auth/refresh',
+        { method: 'POST', body: JSON.stringify({}) },
+        false,
+      )
+      setAccessToken(refreshed.access_token)
+      return apiFetchBlob(path, options, false)
+    } catch {
+      setAccessToken(null)
+    }
+  }
+  if (!res.ok) {
+    const data = await parseJson(res)
+    throw new ApiError(data?.detail ?? 'Request failed', res.status, data?.code)
+  }
+  const disposition = res.headers.get('Content-Disposition') ?? ''
+  const star = disposition.match(/filename\*=UTF-8''([^;]+)/i)
+  const plain = disposition.match(/filename="?([^";]+)"?/i)
+  const filename = star ? decodeURIComponent(star[1]) : plain?.[1] ?? null
+  return { blob: await res.blob(), filename }
+}
