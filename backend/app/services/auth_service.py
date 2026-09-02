@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import hashlib
-import logging
 import secrets
 import uuid
 from datetime import datetime, timedelta, timezone
@@ -43,8 +42,8 @@ from app.schemas.auth import (
     UserOut,
 )
 from app.services.audit_service import write_audit_log
+from app.services import email_service
 
-logger = logging.getLogger(__name__)
 REFRESH_COOKIE = "refresh_token"
 
 
@@ -71,7 +70,8 @@ async def register_user(
     data: RegisterRequest,
     *,
     ip_address: Optional[str] = None,
-) -> tuple[User, str]:
+) -> User:
+    email_service.require_mailer()
     existing = await get_user_by_email(db, data.email)
     if existing:
         raise AppError("Email already registered", status_code=409, code="email_taken")
@@ -109,10 +109,9 @@ async def register_user(
         pass
 
     verify_token = create_signed_token("email_verify", str(user.id), expires_minutes=60 * 24)
-    # Dev: log verification link (replace with SES/email in production + BAA)
     settings = get_settings()
     verify_url = f"{settings.frontend_url}/verify-email?token={verify_token}"
-    logger.info("EMAIL VERIFICATION for %s: %s", user.email, verify_url)
+    await email_service.send_verification_email(user.email, user.full_name, verify_url)
 
     await write_audit_log(
         db,
@@ -123,7 +122,17 @@ async def register_user(
         ip_address=ip_address,
         metadata={"role": user.role.value, "status": user.status.value},
     )
-    return user, verify_token
+    return user
+
+
+async def resend_verification_email(_db: AsyncSession, user: User) -> None:
+    if user.email_verified:
+        raise AppError("Email is already verified", status_code=400, code="already_verified")
+    email_service.require_mailer()
+    token = create_signed_token("email_verify", str(user.id), expires_minutes=60 * 24)
+    settings = get_settings()
+    verify_url = f"{settings.frontend_url}/verify-email?token={token}"
+    await email_service.send_verification_email(user.email, user.full_name, verify_url)
 
 
 async def verify_email(db: AsyncSession, token: str) -> User:
@@ -364,6 +373,7 @@ async def verify_mfa_setup(db: AsyncSession, user: User, code: str) -> User:
 async def request_password_reset(
     db: AsyncSession, email: str, *, ip_address: Optional[str] = None
 ) -> None:
+    email_service.require_mailer()
     user = await get_user_by_email(db, email)
     # Always succeed to avoid email enumeration
     if not user:
@@ -371,7 +381,7 @@ async def request_password_reset(
     token = create_signed_token("password_reset", str(user.id), expires_minutes=60)
     settings = get_settings()
     reset_url = f"{settings.frontend_url}/reset-password?token={token}"
-    logger.info("PASSWORD RESET for %s: %s", user.email, reset_url)
+    await email_service.send_password_reset_email(user.email, user.full_name, reset_url)
     await write_audit_log(
         db,
         actor_id=user.id,

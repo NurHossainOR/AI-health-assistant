@@ -50,7 +50,7 @@ async def register(
     request: Request,
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> MessageOut:
-    user, _ = await auth_service.register_user(db, body, ip_address=client_ip(request))
+    user = await auth_service.register_user(db, body, ip_address=client_ip(request))
     msg = "Account created. Check your email to verify."
     if user.role.value == "doctor":
         msg += " Doctor accounts require admin verification after email confirmation."
@@ -64,6 +64,15 @@ async def verify_email(
 ) -> MessageOut:
     await auth_service.verify_email(db, body.token)
     return MessageOut(message="Email verified successfully.")
+
+
+@router.post("/resend-verification", response_model=MessageOut)
+async def resend_verification(
+    db: Annotated[AsyncSession, Depends(get_db)],
+    user: Annotated[User, Depends(get_current_user)],
+) -> MessageOut:
+    await auth_service.resend_verification_email(db, user)
+    return MessageOut(message="Verification email sent. Check your inbox.")
 
 
 @router.post("/login", response_model=TokenResponse)

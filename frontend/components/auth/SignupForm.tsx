@@ -26,7 +26,7 @@ export function SignupForm() {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [role, setRole] = useState<UserRole>('patient')
-  const [npi, setNpi] = useState('')
+  const [bmdcRegistrationNumber, setBmdcRegistrationNumber] = useState('')
   const [specialty, setSpecialty] = useState('')
   const [message, setMessage] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -45,7 +45,7 @@ export function SignupForm() {
           password,
           full_name: fullName,
           role,
-          bmdc_registration_number: role === 'doctor' ? npi || null : null,
+          bmdc_registration_number: role === 'doctor' ? bmdcRegistrationNumber || null : null,
           specialty: role === 'doctor' ? specialty || null : null,
         }),
       })
@@ -67,7 +67,7 @@ export function SignupForm() {
         </Link>
         <div className="eyebrow">Get started</div>
         <h1>Create account</h1>
-        <p className="lede">Choose your role. Providers require admin verification.</p>
+        <p className="lede">Choose your role. We&apos;ll email a verification link before uploads unlock.</p>
       </header>
 
       {error && <p className="form-error">{error}</p>}
@@ -125,10 +125,10 @@ export function SignupForm() {
       {role === 'doctor' && (
         <>
           <label>
-            NPI number
+            BMDC registration number
             <input 
-              value={npi} 
-              onChange={(e) => setNpi(e.target.value)} 
+              value={bmdcRegistrationNumber} 
+              onChange={(e) => setBmdcRegistrationNumber(e.target.value)} 
               placeholder="Optional — helps verify your credentials" 
             />
           </label>

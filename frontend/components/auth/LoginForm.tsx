@@ -104,6 +104,8 @@ export function LoginForm() {
       </button>
 
       <p className="form-footer">
+        <Link href="/forgot-password">Forgot password?</Link>
+        <br />
         No account? <Link href="/signup">Create one</Link>
       </p>
     </form>
