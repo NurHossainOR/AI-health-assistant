@@ -19,12 +19,19 @@ services:
   redis:
     image: redis:7-alpine
     ports:
-      # Host 6380 avoids conflict with a local Redis already on 6379
       - "6380:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
 
   api:
     build:
       context: ./backend
+    env_file:
+      - path: ./backend/.env
+        required: false
     ports:
       - "8000:8000"
     environment:
@@ -34,11 +41,39 @@ services:
       DEBUG: "true"
       CORS_ORIGINS: '["http://localhost:3000","http://127.0.0.1:3000","http://localhost:5173","http://127.0.0.1:5173"]'
       FRONTEND_URL: http://localhost:3000
-      SECRET_KEY: dev-only-secret-key-replace-via-vault
+      SECRET_KEY: ${SECRET_KEY:-dev-only-secret-key-replace-via-vault}
+      REDIS_URL: redis://redis:6379/0
+      CELERY_BROKER_URL: redis://redis:6379/0
     volumes:
       - ./keys:/keys:ro
     depends_on:
       db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  worker:
+    build:
+      context: ./backend
+    env_file:
+      - path: ./backend/.env
+        required: false
+    command: celery -A app.workers.celery_app worker --loglevel=info
+    environment:
+      DATABASE_URL: postgresql+asyncpg://health:health_dev_password@db:5432/health_intelligence
+      JWT_PRIVATE_KEY_PATH: /keys/jwt_private.pem
+      JWT_PUBLIC_KEY_PATH: /keys/jwt_public.pem
+      DEBUG: "true"
+      FRONTEND_URL: http://localhost:3000
+      SECRET_KEY: ${SECRET_KEY:-dev-only-secret-key-replace-via-vault}
+      REDIS_URL: redis://redis:6379/0
+      CELERY_BROKER_URL: redis://redis:6379/0
+    volumes:
+      - ./keys:/keys:ro
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
         condition: service_healthy
 
   web:

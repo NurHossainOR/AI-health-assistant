@@ -1,8 +1,9 @@
 from functools import lru_cache
 from pathlib import Path
 from typing import List
+from urllib.parse import urlparse
 
-from pydantic import Field
+from pydantic import AliasChoices, Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 BACKEND_DIR = Path(__file__).resolve().parents[2]
@@ -13,6 +14,7 @@ class Settings(BaseSettings):
         env_file=str(BACKEND_DIR / ".env"),
         env_file_encoding="utf-8",
         extra="ignore",
+        populate_by_name=True,
     )
 
     app_name: str = "Patient Health Intelligence Platform"
@@ -32,6 +34,53 @@ class Settings(BaseSettings):
         default_factory=lambda: ["http://localhost:5173", "http://127.0.0.1:5173"]
     )
     inactivity_timeout_minutes: int = 15
+
+    smtp_host: str = ""
+    smtp_port: int = 587
+    smtp_username: str = ""
+    smtp_password: str = ""
+    smtp_from_email: str = ""
+    smtp_from_name: str = "Spondon"
+    smtp_use_tls: bool = True
+    smtp_use_ssl: bool = False
+    # Enforce verified email before uploads. Off in local/dev; set true in production.
+    require_email_verification: bool = False
+
+    redis_url: str = "redis://localhost:6380/0"
+    celery_broker_url: str = "redis://localhost:6380/0"
+
+    # Backblaze B2 (S3-compatible). No credential defaults — fail closed.
+    b2_key_id: str = Field(
+        default="",
+        validation_alias=AliasChoices("B2_KEY_ID", "B2_ACCESS_KEY_ID"),
+    )
+    b2_application_key: str = Field(
+        default="",
+        validation_alias=AliasChoices("B2_APPLICATION_KEY", "B2_SECRET_ACCESS_KEY"),
+    )
+    b2_bucket: str = ""
+    b2_endpoint_url: str = ""
+    b2_region: str = ""
+    presigned_url_expire_seconds: int = 600
+    max_upload_bytes: int = 25 * 1024 * 1024
+    extraction_confidence_threshold: float = 0.75
+
+    @property
+    def b2_s3_endpoint(self) -> str:
+        if self.b2_endpoint_url:
+            return self.b2_endpoint_url.rstrip("/")
+        if self.b2_region:
+            return f"https://s3.{self.b2_region}.backblazeb2.com"
+        return ""
+
+    @property
+    def b2_s3_region(self) -> str:
+        if self.b2_region:
+            return self.b2_region
+        host = (urlparse(self.b2_s3_endpoint).hostname or "").split(".")
+        if len(host) >= 4 and host[0] == "s3":
+            return host[1]
+        return ""
 
     def _resolve_key_path(self, path: str) -> Path:
         p = Path(path)

@@ -14,5 +14,14 @@ Pillow==11.1.0
 python-multipart==0.0.20
 email-validator==2.2.0
 httpx==0.28.1
+celery[redis]==5.4.0
+redis==5.2.1
+boto3==1.36.16
+pypdf==5.3.0
+pydicom==3.0.1
+numpy==2.2.6
+pylibjpeg==2.0.1
+pylibjpeg-libjpeg==2.3.0
+pylibjpeg-openjpeg==2.4.0
 pytest==8.3.4
 pytest-asyncio==0.25.0
