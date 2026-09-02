@@ -41,6 +41,7 @@ class ConsentScope(str, enum.Enum):
     imaging = "imaging"
     prescriptions = "prescriptions"
     discharge = "discharge"
+    document = "document"
 
 
 class User(Base):
@@ -93,6 +94,9 @@ class PatientProfile(Base):
     date_of_birth: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
     sex: Mapped[Optional[str]] = mapped_column(String(32), nullable=True)
     allergies: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    processing_consent_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
 
     user: Mapped["User"] = relationship(back_populates="patient_profile")
 

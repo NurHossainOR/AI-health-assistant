@@ -1,3 +1,11 @@
+from app.models.document import (
+    DocType,
+    Document,
+    DocumentPage,
+    DocumentStatus,
+    ExtractedField,
+    ImagingStudy,
+)
 from app.models.user import (
     AuditLog,
     ConsentGrant,
@@ -24,4 +32,10 @@ __all__ = [
     "AuditLog",
     "PasswordResetToken",
     "IngestionJob",
+    "Document",
+    "DocumentPage",
+    "ExtractedField",
+    "ImagingStudy",
+    "DocType",
+    "DocumentStatus",
 ]

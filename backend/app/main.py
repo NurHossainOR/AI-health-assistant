@@ -6,6 +6,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import text
 
 from app.api.v1 import api_router
+from app.api.v1 import ws as ws_routes
 from app.core.config import get_settings
 from app.core.exceptions import AppError, app_error_handler
 from app.db.session import Base, engine
@@ -13,12 +14,17 @@ from app.models import (  # noqa: F401 — register models on metadata
     AuditLog,
     ConsentGrant,
     DoctorProfile,
+    Document,
+    DocumentPage,
+    ExtractedField,
+    ImagingStudy,
     IngestionJob,
     PasswordResetToken,
     PatientProfile,
     RefreshToken,
     User,
 )
+from app.services import storage_service
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -51,6 +57,39 @@ RLS_SQL = [
       FOR INSERT
       WITH CHECK (true)
     """,
+    "ALTER TABLE documents ENABLE ROW LEVEL SECURITY",
+    "DROP POLICY IF EXISTS documents_patient_scope ON documents",
+    """
+    CREATE POLICY documents_patient_scope ON documents
+      USING (
+        patient_id::text = current_setting('app.current_user_id', true)
+        OR current_setting('app.bypass_rls', true) = 'on'
+      )
+    """,
+]
+
+SCHEMA_PATCHES = [
+    "ALTER TABLE patient_profiles ADD COLUMN IF NOT EXISTS processing_consent_at TIMESTAMPTZ",
+    """
+    DO $$
+    BEGIN
+      IF EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_schema = 'public' AND table_name = 'doctor_profiles' AND column_name = 'npi_number'
+      ) AND NOT EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_schema = 'public' AND table_name = 'doctor_profiles'
+          AND column_name = 'bmdc_registration_number'
+      ) THEN
+        ALTER TABLE doctor_profiles RENAME COLUMN npi_number TO bmdc_registration_number;
+      END IF;
+    END $$
+    """,
+    "ALTER TABLE doctor_profiles ADD COLUMN IF NOT EXISTS bmdc_registration_number VARCHAR(20)",
+    "DROP INDEX IF EXISTS ix_doctor_profiles_npi_number",
+    "CREATE INDEX IF NOT EXISTS ix_doctor_profiles_bmdc_registration_number ON doctor_profiles (bmdc_registration_number)",
+    "ALTER TABLE documents ADD COLUMN IF NOT EXISTS display_name VARCHAR(255)",
+    "ALTER TYPE consent_scope ADD VALUE IF NOT EXISTS 'document'",
 ]
 
 
@@ -59,11 +98,16 @@ async def init_db() -> None:
         await conn.run_sync(Base.metadata.create_all)
         # App role bypasses RLS for API layer; policies still defend direct DB access
         await conn.execute(text("SET app.bypass_rls = 'on'"))
-        for stmt in RLS_SQL:
+        for stmt in SCHEMA_PATCHES + RLS_SQL:
             try:
-                await conn.execute(text(stmt))
+                async with conn.begin_nested():
+                    await conn.execute(text(stmt))
             except Exception as exc:  # noqa: BLE001
-                logger.warning("RLS statement skipped/failed: %s (%s)", stmt[:60], exc)
+                logger.warning("Schema/RLS statement skipped/failed: %s (%s)", stmt[:60], exc)
+    try:
+        storage_service.probe_bucket()
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("Object storage probe skipped: %s", type(exc).__name__)
     logger.info("Database schema ready")
 
 
@@ -86,6 +130,7 @@ def create_app() -> FastAPI:
         allow_headers=["*"],
     )
     app.include_router(api_router)
+    app.include_router(ws_routes.router)
 
     @app.get("/health")
     async def health():
