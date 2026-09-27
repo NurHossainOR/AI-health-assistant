@@ -73,11 +73,34 @@ class Settings(BaseSettings):
     gemini_api_key: str = ""
     gemini_chat_model: str = "gemini-3-flash-preview"
     gemini_embedding_model: str = "models/gemini-embedding-001"
+    # OpenRouter fallbacks, tried in order when Gemini fails or is out of quota. Comma-separated.
+    openrouter_api_key: str = ""
+    openrouter_base_url: str = "https://openrouter.ai/api/v1"
+    openrouter_text_models: str = (
+        "nvidia/nemotron-3-ultra-550b-a55b:free,"
+        "google/gemma-4-31b-it:free,"
+        "qwen/qwen3.8-27b:free"
+    )
+    # Must accept image input (used for scanned-report extraction).
+    openrouter_vision_models: str = (
+        "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free,"
+        "qwen/qwen3.8-27b:free,"
+        "google/gemma-4-31b-it:free"
+    )
+    llm_timeout_seconds: float = 90.0
     rag_top_k: int = 6
     rag_history_turns: int = 10
     chroma_host: str = "localhost"
     chroma_port: int = 8001
     chroma_collection: str = "patient_record_chunks"
+
+    @property
+    def openrouter_text_model_list(self) -> list[str]:
+        return [m.strip() for m in self.openrouter_text_models.split(",") if m.strip()]
+
+    @property
+    def openrouter_vision_model_list(self) -> list[str]:
+        return [m.strip() for m in self.openrouter_vision_models.split(",") if m.strip()]
 
     @property
     def b2_s3_endpoint(self) -> str:
