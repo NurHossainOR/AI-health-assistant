@@ -4,6 +4,8 @@ import { useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { apiFetch } from '@/lib/api'
 import { FlagBadge } from '@/components/summaries/FlagBadge'
+import { useLocale, useT } from '@/lib/i18n'
+import { useLanguage } from '@/lib/language'
 import type {
   DocumentSummary,
   SummaryAudience,
@@ -11,12 +13,11 @@ import type {
 } from '@/types/summaries'
 
 const PENDING_POLL_MS = 4000
-const DISCLAIMER =
-  'Informational only — not a diagnosis. Generated from the confirmed values in this report. ' +
-  'Discuss any decision with your doctor.'
+const TRANSLATION_POLL_MS = 5000
 
 function List({ items }: { items?: string[] }) {
-  if (!items?.length) return <p className="muted">None noted.</p>
+  const t = useT()
+  if (!items?.length) return <p className="muted">{t('summary.noneNoted')}</p>
   return (
     <ul className="summary-list">
       {items.map((item, i) => (
@@ -27,25 +28,26 @@ function List({ items }: { items?: string[] }) {
 }
 
 function DoctorContent({ summary }: { summary: DocumentSummary }) {
+  const t = useT()
   const c = summary.content ?? {}
   return (
     <div className="summary-body">
       <section>
-        <h3>Chief findings</h3>
+        <h3>{t('summary.chiefFindings')}</h3>
         <List items={c.chief_findings} />
       </section>
       <section>
-        <h3>Abnormal values</h3>
+        <h3>{t('summary.abnormalValues')}</h3>
         {c.abnormal_values?.length ? (
           <div className="review-table-wrap">
             <table className="data-table">
               <thead>
                 <tr>
-                  <th>Test</th>
-                  <th>Value</th>
-                  <th>Reference</th>
-                  <th>Flag</th>
-                  <th>Previous</th>
+                  <th>{t('col.test')}</th>
+                  <th>{t('col.value')}</th>
+                  <th>{t('col.reference')}</th>
+                  <th>{t('col.flag')}</th>
+                  <th>{t('col.previous')}</th>
                   <th>Δ</th>
                 </tr>
               </thead>
@@ -68,15 +70,15 @@ function DoctorContent({ summary }: { summary: DocumentSummary }) {
             </table>
           </div>
         ) : (
-          <p className="muted">No values outside the reference range.</p>
+          <p className="muted">{t('summary.noAbnormal')}</p>
         )}
       </section>
       <section>
-        <h3>Medications</h3>
+        <h3>{t('summary.medications')}</h3>
         <List items={c.medications} />
       </section>
       <section>
-        <h3>Items to review</h3>
+        <h3>{t('summary.itemsToReview')}</h3>
         <List items={c.items_to_review} />
       </section>
     </div>
@@ -84,12 +86,13 @@ function DoctorContent({ summary }: { summary: DocumentSummary }) {
 }
 
 function PatientContent({ summary }: { summary: DocumentSummary }) {
+  const t = useT()
   const c = summary.content ?? {}
   return (
     <div className="summary-body">
       {c.overview && <p className="summary-overview">{c.overview}</p>}
       <section>
-        <h3>Your results, explained</h3>
+        <h3>{t('summary.resultsExplained')}</h3>
         {c.findings?.length ? (
           <ul className="finding-cards">
             {c.findings.map((f, i) => (
@@ -106,17 +109,17 @@ function PatientContent({ summary }: { summary: DocumentSummary }) {
             ))}
           </ul>
         ) : (
-          <p className="muted">No individual results to explain.</p>
+          <p className="muted">{t('summary.noFindings')}</p>
         )}
       </section>
       {c.what_this_means && (
         <section>
-          <h3>What this means</h3>
+          <h3>{t('summary.whatThisMeans')}</h3>
           <p>{c.what_this_means}</p>
         </section>
       )}
       <section>
-        <h3>Questions you might ask your doctor</h3>
+        <h3>{t('summary.questions')}</h3>
         <List items={c.questions_for_doctor} />
       </section>
     </div>
@@ -133,6 +136,9 @@ export function SummaryPanel({
   canRegenerate: boolean
 }) {
   const queryClient = useQueryClient()
+  const t = useT()
+  const locale = useLocale()
+  const language = useLanguage()
   const [version, setVersion] = useState<number | null>(null)
 
   const versionsQuery = useQuery({
@@ -140,13 +146,18 @@ export function SummaryPanel({
     queryFn: () => apiFetch<SummaryVersion[]>(`/api/v1/summaries/${documentId}/versions`),
   })
   const summaryQuery = useQuery({
-    queryKey: ['summary', documentId, audience, version],
+    queryKey: ['summary', documentId, audience, version, language],
     queryFn: () =>
       apiFetch<DocumentSummary>(
-        `/api/v1/summaries/${documentId}?audience=${audience}${version ? `&version=${version}` : ''}`,
+        `/api/v1/summaries/${documentId}?audience=${audience}&lang=${language}${version ? `&version=${version}` : ''}`,
       ),
+    placeholderData: (previous) => previous,
     refetchInterval: (query) =>
-      query.state.data?.status === 'pending' ? PENDING_POLL_MS : false,
+      query.state.data?.status === 'pending'
+        ? PENDING_POLL_MS
+        : query.state.data?.translation_pending
+          ? TRANSLATION_POLL_MS
+          : false,
   })
 
   const regenerate = useMutation({
@@ -160,9 +171,9 @@ export function SummaryPanel({
       // Poll until a newer version lands, then refresh the version list.
       const poll = async (attempt: number) => {
         const next = await queryClient.fetchQuery({
-          queryKey: ['summary', documentId, audience, null],
+          queryKey: ['summary', documentId, audience, null, 'en'],
           queryFn: () =>
-            apiFetch<DocumentSummary>(`/api/v1/summaries/${documentId}?audience=${audience}`),
+            apiFetch<DocumentSummary>(`/api/v1/summaries/${documentId}?audience=${audience}&lang=en`),
           staleTime: 0,
         })
         if ((next.version_no ?? 0) > before || attempt >= 20) {
@@ -179,23 +190,25 @@ export function SummaryPanel({
   const versions = (versionsQuery.data ?? []).filter((v) => v.audience === audience)
   const summary = summaryQuery.data
   const busy = regenerate.isPending || (regenerate.isSuccess && summaryQuery.isFetching)
+  // Bangla is being translated in the background; the English version is shown meanwhile.
+  const translating = language !== 'en' && Boolean(summary?.translation_pending)
 
   return (
     <section className="panel summary-panel">
       <div className="summary-head">
-        <p className="summary-disclaimer">{DISCLAIMER}</p>
+        <p className="summary-disclaimer">{t('summary.disclaimer')}</p>
         <div className="summary-controls">
           {versions.length > 1 && (
             <label className="muted">
-              Version{' '}
+              {t('summary.version')}{' '}
               <select
                 value={version ?? ''}
                 onChange={(e) => setVersion(e.target.value ? Number(e.target.value) : null)}
               >
-                <option value="">Latest</option>
+                <option value="">{t('summary.latest')}</option>
                 {versions.map((v) => (
                   <option key={v.id} value={v.version_no}>
-                    v{v.version_no} · {new Date(v.generated_at).toLocaleDateString()}
+                    v{v.version_no} · {new Date(v.generated_at).toLocaleDateString(locale)}
                   </option>
                 ))}
               </select>
@@ -208,28 +221,26 @@ export function SummaryPanel({
               disabled={busy}
               onClick={() => regenerate.mutate()}
             >
-              {busy ? 'Regenerating…' : 'Regenerate'}
+              {busy ? t('summary.regenerating') : t('summary.regenerate')}
             </button>
           )}
         </div>
       </div>
 
-      {summaryQuery.isLoading && <p className="muted">Loading summary…</p>}
-      {summaryQuery.isError && (
-        <p className="form-error">Could not load this summary. Refresh to try again.</p>
+      {translating && <p className="muted">{t('summary.translating')}</p>}
+      {summaryQuery.isLoading && <p className="muted">{t('summary.loading')}</p>}
+      {summaryQuery.isError && <p className="form-error">{t('summary.loadFailed')}</p>}
+      {summary?.translation_failed && (
+        <p className="form-error">{t('summary.translationFailed')}</p>
       )}
-      {summary?.status === 'pending' && (
-        <p className="muted">Generating summary… this usually takes under a minute.</p>
-      )}
+      {summary?.status === 'pending' && <p className="muted">{t('summary.pending')}</p>}
       {summary?.status === 'failed' && (
         <p className="form-error">
-          {summary.error_message || 'The summary could not be generated.'}
-          {canRegenerate ? ' Use Regenerate to try again.' : ''}
+          {language === 'en' && summary.error_message ? summary.error_message : t('summary.failed')}
+          {canRegenerate ? t('summary.retryHint') : ''}
         </p>
       )}
-      {regenerate.isError && (
-        <p className="form-error">Could not start regeneration. Try again shortly.</p>
-      )}
+      {regenerate.isError && <p className="form-error">{t('summary.regenerateFailed')}</p>}
       {summary?.status === 'ready' &&
         (audience === 'doctor' ? (
           <DoctorContent summary={summary} />
@@ -238,7 +249,10 @@ export function SummaryPanel({
         ))}
       {summary?.status === 'ready' && summary.generated_at && (
         <p className="muted summary-meta">
-          Version {summary.version_no} · generated {new Date(summary.generated_at).toLocaleString()}
+          {t('summary.meta', {
+            version: summary.version_no ?? '',
+            date: new Date(summary.generated_at).toLocaleString(locale),
+          })}
         </p>
       )}
     </section>

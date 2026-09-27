@@ -11,6 +11,7 @@ import { FlagBadge } from '@/components/summaries/FlagBadge'
 import { SummaryPanel } from '@/components/summaries/SummaryPanel'
 import { CompareTable } from '@/components/trends/CompareTable'
 import { ExtractedFieldsReviewTable } from '@/components/upload/ExtractedFieldsReviewTable'
+import { useLocale, useT } from '@/lib/i18n'
 import {
   DOC_TYPE_LABELS,
   documentDisplayName,
@@ -23,24 +24,25 @@ type Tab = 'patient' | 'doctor' | 'fields' | 'compare'
 const CONFIRMABLE_STATUSES = ['extracted', 'needs_review', 'validating']
 
 function ExtractedDataTable({ documentId }: { documentId: string }) {
+  const t = useT()
   const query = useQuery({
     queryKey: ['extracted-fields', documentId],
     queryFn: () => apiFetch<ExtractedField[]>(`/api/v1/documents/${documentId}/extracted-fields`),
   })
-  if (query.isLoading) return <p className="muted">Loading extracted values…</p>
-  if (query.isError) return <p className="form-error">Could not load extracted values.</p>
+  if (query.isLoading) return <p className="muted">{t('fields.loading')}</p>
+  if (query.isError) return <p className="form-error">{t('fields.failed')}</p>
   const fields = (query.data ?? []).filter((f) => f.name !== 'Needs manual review')
-  if (!fields.length) return <p className="muted">No structured values were extracted.</p>
+  if (!fields.length) return <p className="muted">{t('fields.empty')}</p>
   return (
     <div className="review-table-wrap">
       <table className="data-table">
         <thead>
           <tr>
-            <th>Name</th>
-            <th>Value</th>
-            <th>Reference</th>
-            <th>Date</th>
-            <th>Flag</th>
+            <th>{t('col.name')}</th>
+            <th>{t('col.value')}</th>
+            <th>{t('col.reference')}</th>
+            <th>{t('col.date')}</th>
+            <th>{t('col.flag')}</th>
           </tr>
         </thead>
         <tbody>
@@ -69,6 +71,8 @@ export function DocumentDetail() {
   const { id } = useParams<{ id: string }>()
   const { user } = useAuth()
   const queryClient = useQueryClient()
+  const t = useT()
+  const locale = useLocale()
   const [tab, setTab] = useState<Tab | null>(null)
   const [openError, setOpenError] = useState<string | null>(null)
 
@@ -84,23 +88,23 @@ export function DocumentDetail() {
   const isOwner = user.role === 'patient' && doc?.patient_id === user.id
 
   if (docsQuery.isLoading) {
-    return <main className="dashboard"><p className="muted">Loading report…</p></main>
+    return <main className="dashboard"><p className="muted">{t('doc.loading')}</p></main>
   }
   if (!doc) {
     return (
       <main className="dashboard">
-        <p className="form-error">This report was not found or you don&apos;t have access to it.</p>
-        <Link href="/dashboard" className="btn btn-ghost">Back to dashboard</Link>
+        <p className="form-error">{t('doc.notFound')}</p>
+        <Link href="/dashboard" className="btn btn-ghost">{t('doc.back')}</Link>
       </main>
     )
   }
 
   const confirmed = doc.status === 'confirmed'
   const tabs: Array<{ key: Tab; label: string }> = [
-    { key: 'patient', label: 'Patient explanation' },
-    { key: 'doctor', label: 'Doctor summary' },
-    { key: 'fields', label: 'Extracted data' },
-    { key: 'compare', label: 'Compare' },
+    { key: 'patient', label: t('tab.patient') },
+    { key: 'doctor', label: t('tab.doctor') },
+    { key: 'fields', label: t('tab.fields') },
+    { key: 'compare', label: t('tab.compare') },
   ]
 
   return (
@@ -110,8 +114,9 @@ export function DocumentDetail() {
           <p className="eyebrow">{DOC_TYPE_LABELS[doc.doc_type]}</p>
           <h1>{documentDisplayName(doc)}</h1>
           <p className="muted">
-            Uploaded {new Date(doc.uploaded_at).toLocaleDateString()}
-            {doc.confirmed_at && ` · confirmed ${new Date(doc.confirmed_at).toLocaleDateString()}`}
+            {t('doc.uploaded')} {new Date(doc.uploaded_at).toLocaleDateString(locale)}
+            {doc.confirmed_at &&
+              ` · ${t('doc.confirmed')} ${new Date(doc.confirmed_at).toLocaleDateString(locale)}`}
           </p>
         </div>
         <div className="dash-actions">
@@ -120,13 +125,13 @@ export function DocumentDetail() {
             className="btn btn-ghost"
             onClick={() => {
               setOpenError(null)
-              openDocumentFile(doc.id).catch(() => setOpenError('Could not open the original file.'))
+              openDocumentFile(doc.id).catch(() => setOpenError(t('doc.openFailed')))
             }}
           >
-            Open original
+            {t('doc.openOriginal')}
           </button>
           <Link href={user.role === 'patient' ? '/trends' : `/trends?patient=${doc.patient_id}`} className="btn btn-primary">
-            View trends
+            {t('doc.viewTrends')}
           </Link>
         </div>
       </header>
@@ -136,8 +141,7 @@ export function DocumentDetail() {
         <>
           <section className="panel">
             <p className="muted">
-              Check the extracted values below and confirm the report. Summaries, flags and trends
-              are generated from confirmed reports only.
+              {t('doc.confirmPrompt')}
             </p>
           </section>
           <ExtractedFieldsReviewTable
@@ -153,8 +157,8 @@ export function DocumentDetail() {
         <section className="panel">
           <p className="muted">
             {isOwner
-              ? `This report is still being processed (${doc.status.replace('_', ' ')}). Summaries appear once it is confirmed.`
-              : 'Summaries and comparisons appear once the patient confirms this report.'}
+              ? t('doc.processing', { status: doc.status.replace('_', ' ') })
+              : t('doc.awaitingPatient')}
           </p>
         </section>
       ) : (

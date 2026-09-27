@@ -41,6 +41,9 @@ export interface DocumentSummary {
   model_version?: string | null
   error_message?: string | null
   generated_at?: string | null
+  language: 'en' | 'bn'
+  translation_pending?: boolean
+  translation_failed?: boolean
 }
 
 export interface SummaryVersion {

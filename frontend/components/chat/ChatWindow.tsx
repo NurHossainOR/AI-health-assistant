@@ -4,6 +4,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { apiFetch } from '@/lib/api'
 import { streamChatMessage } from '@/lib/chatStream'
+import { useLanguage } from '@/lib/language'
 import type { ChatCitation, ChatMessage as ChatMessageType, ChatSession } from '@/types/chat'
 import { ChatDisclaimerBanner } from '@/components/chat/ChatDisclaimerBanner'
 import { ChatMessage } from '@/components/chat/ChatMessage'
@@ -16,6 +17,7 @@ function localId() {
 
 export function ChatWindow() {
   const queryClient = useQueryClient()
+  const language = useLanguage()
   const [sessionId, setSessionId] = useState<string | null>(null)
   const [draft, setDraft] = useState('')
   const [liveMessages, setLiveMessages] = useState<ChatMessageType[]>([])
@@ -143,6 +145,7 @@ export function ChatWindow() {
           }
         },
         controller.signal,
+        language,
       )
       await queryClient.invalidateQueries({ queryKey: ['chat-sessions'] })
       await queryClient.invalidateQueries({ queryKey: ['chat-messages', activeId] })

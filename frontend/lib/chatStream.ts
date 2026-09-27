@@ -36,6 +36,7 @@ export async function streamChatMessage(
   content: string,
   onEvent: (event: ChatStreamEvent) => void,
   signal?: AbortSignal,
+  language: 'en' | 'bn' = 'en',
 ): Promise<void> {
   const send = async () => {
     const headers = new Headers({ 'Content-Type': 'application/json' })
@@ -45,7 +46,7 @@ export async function streamChatMessage(
       method: 'POST',
       headers,
       credentials: 'include',
-      body: JSON.stringify({ content }),
+      body: JSON.stringify({ content, language }),
       signal,
     })
   }

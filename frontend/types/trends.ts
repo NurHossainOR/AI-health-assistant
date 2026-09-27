@@ -65,14 +65,6 @@ export interface CompareResponse {
   rows: CompareRow[]
 }
 
-export const FLAG_LABELS: Record<LabFlag, string> = {
-  normal: 'Normal',
-  borderline: 'Borderline',
-  abnormal: 'Abnormal',
-  critical: 'Critical',
-  unknown: 'No range',
-}
-
 export const FLAG_COLORS: Record<LabFlag, string> = {
   normal: '#0E6F64',
   borderline: '#B9902A',
