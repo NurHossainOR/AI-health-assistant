@@ -19,6 +19,9 @@ class SummaryOut(BaseModel):
     model_version: Optional[str] = None
     error_message: Optional[str] = None
     generated_at: Optional[datetime] = None
+    language: str = "en"  # language of `content` actually returned
+    translation_pending: bool = False  # Bangla is being prepared; English shown meanwhile
+    translation_failed: bool = False
 
 
 class SummaryVersionOut(BaseModel):

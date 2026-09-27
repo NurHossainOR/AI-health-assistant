@@ -25,6 +25,7 @@ from app.models import (  # noqa: F401 — register models on metadata
     PasswordResetToken,
     PatientProfile,
     RefreshToken,
+    SummaryTranslation,
     User,
 )
 from app.services import storage_service
@@ -87,6 +88,15 @@ RLS_SQL = [
     "DROP POLICY IF EXISTS document_summaries_patient_scope ON document_summaries",
     """
     CREATE POLICY document_summaries_patient_scope ON document_summaries
+      USING (
+        patient_id::text = current_setting('app.current_user_id', true)
+        OR current_setting('app.bypass_rls', true) = 'on'
+      )
+    """,
+    "ALTER TABLE document_summary_translations ENABLE ROW LEVEL SECURITY",
+    "DROP POLICY IF EXISTS document_summary_translations_patient_scope ON document_summary_translations",
+    """
+    CREATE POLICY document_summary_translations_patient_scope ON document_summary_translations
       USING (
         patient_id::text = current_setting('app.current_user_id', true)
         OR current_setting('app.bypass_rls', true) = 'on'

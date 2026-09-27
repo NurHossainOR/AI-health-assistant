@@ -6,19 +6,26 @@ returns is overwritten with the stored one, so the LLM only writes prose.
 
 from __future__ import annotations
 
+import asyncio
+import copy
 import json
 import logging
 from typing import Any, Optional
 from uuid import UUID
 
 from sqlalchemy import func, select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from app.core.config import get_settings
 from app.core.exceptions import AppError
 from app.models.document import Document, DocumentStatus
-from app.models.summary import DocumentSummary, SummaryAudience, SummaryStatus
+from app.models.summary import (
+    DocumentSummary,
+    SummaryAudience,
+    SummaryStatus,
+    SummaryTranslation,
+)
 from app.models.user import User, UserRole
 from app.services import lab_catalog, langchain_llm, trend_service
 from app.services.audit_service import write_audit_log
@@ -173,18 +180,18 @@ async def generate_summaries(db: AsyncSession, document_id: UUID) -> list[Docume
     document = await _load(db, document_id)
     if not document or document.status != DocumentStatus.confirmed:
         return []
-    settings = get_settings()
     summary_input = await build_summary_input(db, document)
     data = json.dumps(summary_input, indent=2, default=str)
 
     rows: list[DocumentSummary] = []
     for audience, template in PROMPTS.items():
         content: Optional[dict[str, Any]] = None
+        model: Optional[str] = None
         error: Optional[str] = None
-        if not settings.gemini_api_key:
-            error = "Summaries are not configured. Set GEMINI_API_KEY on the server."
+        if not langchain_llm.llm_configured():
+            error = "Summaries are not configured. Set GEMINI_API_KEY or OPENROUTER_API_KEY on the server."
         else:
-            content = await langchain_llm.generate_json(
+            content, model = await langchain_llm.generate_json_with_model(
                 template.format(guardrails=GUARDRAILS, data=data)
             )
             if content is None:
@@ -196,7 +203,7 @@ async def generate_summaries(db: AsyncSession, document_id: UUID) -> list[Docume
             version_no=await _next_version(db, document.id, audience),
             status=SummaryStatus.ready if content is not None else SummaryStatus.failed,
             content=enforce_flags(content, summary_input["labs"]) if content is not None else None,
-            model_version=settings.gemini_chat_model,
+            model_version=model,
             error_message=error,
         )
         db.add(row)
@@ -218,6 +225,7 @@ async def get_summary(
     audience: SummaryAudience,
     *,
     version: Optional[int] = None,
+    language: str = "en",
     ip_address: Optional[str] = None,
 ) -> Optional[DocumentSummary]:
     document = await _get_accessible_document(db, user, document_id)
@@ -243,6 +251,7 @@ async def get_summary(
                 "document_id": str(document.id),
                 "audience": audience.value,
                 "version_no": summary.version_no,
+                "language": language,
             },
         )
     return summary
@@ -269,3 +278,243 @@ async def request_regeneration(db: AsyncSession, user: User, document_id: UUID) 
     if document.status != DocumentStatus.confirmed:
         raise AppError("Confirm the document before generating summaries", status_code=400)
     return document
+
+
+# --- Translation ---------------------------------------------------------------------------
+
+SUPPORTED_LANGUAGES = {"en", "bn"}
+LANGUAGE_NAMES = {"bn": "Bangla (বাংলা)"}
+
+# Only these prose fields are translated. Names, values, units, references, flags, deltas and
+# medications are copied from the English source untouched.
+_SCALAR_PROSE = ("overview", "what_this_means")
+_LIST_PROSE = ("chief_findings", "items_to_review", "questions_for_doctor")
+_NESTED_PROSE = (("findings", "plain_explanation"),)
+
+TRANSLATE_PROMPT = """Translate each value in the JSON object below into natural, simple {language}
+for a patient. Keep medical test names, abbreviations (e.g. HbA1c, LDL, MCV), numbers, units and
+dates exactly as written. Do not add advice or extra text.
+Return JSON only, with exactly the same keys: {{"<key>": "<translated text>", ...}}
+
+{payload}
+"""
+TRANSLATE_BATCH_SIZE = 12
+
+
+def _prose_slots(content: dict[str, Any]):
+    """Yield (container, key) for each translatable string, in a fixed order."""
+    for key in _SCALAR_PROSE:
+        if isinstance(content.get(key), str) and content[key].strip():
+            yield content, key
+    for key in _LIST_PROSE:
+        items = content.get(key)
+        if isinstance(items, list):
+            for i, item in enumerate(items):
+                if isinstance(item, str) and item.strip():
+                    yield items, i
+    for list_key, field_key in _NESTED_PROSE:
+        items = content.get(list_key)
+        if isinstance(items, list):
+            for item in items:
+                if isinstance(item, dict) and isinstance(item.get(field_key), str) and item[field_key].strip():
+                    yield item, field_key
+
+
+def collect_prose(content: dict[str, Any]) -> list[str]:
+    return [container[key] for container, key in _prose_slots(content)]
+
+
+def apply_prose(content: dict[str, Any], strings: list[str]) -> dict[str, Any]:
+    """Deep-copy the English content and swap in translated prose; everything else is unchanged."""
+    result = copy.deepcopy(content)
+    slots = list(_prose_slots(result))
+    if len(slots) != len(strings):
+        raise ValueError(f"expected {len(slots)} strings, got {len(strings)}")
+    for (container, key), text in zip(slots, strings):
+        container[key] = text
+    return result
+
+
+async def _translate_batch(
+    batch: list[str], offset: int, language: str
+) -> Optional[tuple[list[str], Optional[str]]]:
+    keys = [str(offset + i + 1) for i in range(len(batch))]
+    reply, model = await langchain_llm.generate_json_with_model(
+        TRANSLATE_PROMPT.format(
+            language=LANGUAGE_NAMES[language],
+            payload=json.dumps(dict(zip(keys, batch)), ensure_ascii=False, indent=1),
+        ),
+        json_mode=True,
+    )
+    if not isinstance(reply, dict):
+        return None
+    values = [reply.get(k) for k in keys]
+    if not all(isinstance(v, str) and v.strip() for v in values):
+        logger.warning("Translation batch missing %s of %s strings", sum(
+            not (isinstance(v, str) and v.strip()) for v in values), len(keys))
+        return None
+    return values, model
+
+
+async def _translate_strings(
+    strings: list[str], language: str
+) -> Optional[tuple[list[str], Optional[str]]]:
+    """Translate in numbered batches (run concurrently) so no single reply is long enough to truncate."""
+    batches = [
+        _translate_batch(strings[offset : offset + TRANSLATE_BATCH_SIZE], offset, language)
+        for offset in range(0, len(strings), TRANSLATE_BATCH_SIZE)
+    ]
+    results = await asyncio.gather(*batches)
+    if any(r is None for r in results):
+        return None
+    translated: list[str] = []
+    models: list[str] = []
+    for values, model in results:  # type: ignore[misc]
+        translated.extend(values)
+        if model and model not in models:
+            models.append(model)
+    return translated, ", ".join(models) or None
+
+
+async def _existing_translation(
+    db: AsyncSession, summary_id: UUID, language: str
+) -> Optional[SummaryTranslation]:
+    return await db.scalar(
+        select(SummaryTranslation).where(
+            SummaryTranslation.summary_id == summary_id,
+            SummaryTranslation.language == language,
+        )
+    )
+
+
+async def translate_summary(
+    db: AsyncSession, summary: DocumentSummary, language: str
+) -> Optional[dict[str, Any]]:
+    """Translated content for a ready summary, created and stored on first request.
+
+    Returns None when translation isn't possible right now; callers fall back to English.
+    """
+    if language == "en" or language not in SUPPORTED_LANGUAGES:
+        return summary.content
+    if summary.status != SummaryStatus.ready or not summary.content:
+        return None
+    existing = await _existing_translation(db, summary.id, language)
+    if existing:
+        return existing.content
+
+    strings = collect_prose(summary.content)
+    if not strings:
+        return summary.content
+    if not langchain_llm.llm_configured():
+        return None
+    result = await _translate_strings(strings, language)
+    if result is None:
+        return None
+    translated, model = result
+    try:
+        content = apply_prose(summary.content, translated)
+    except ValueError as exc:
+        logger.warning("Summary translation rejected for %s: %s", summary.id, exc)
+        return None
+
+    try:
+        async with db.begin_nested():
+            db.add(
+                SummaryTranslation(
+                    summary_id=summary.id,
+                    patient_id=summary.patient_id,
+                    language=language,
+                    content=content,
+                    model_version=model[:128] if model else None,
+                )
+            )
+    except IntegrityError:
+        # Another viewer translated the same version first; use theirs.
+        existing = await _existing_translation(db, summary.id, language)
+        if existing:
+            return existing.content
+    return content
+
+
+# --- Background translation --------------------------------------------------------------
+# Free fallback models can take minutes, so translation runs in the worker. Redis keys
+# dedupe concurrent requests and briefly remember failures so pollers stop waiting.
+
+TRANSLATION_LOCK_SECONDS = 10 * 60
+TRANSLATION_FAILED_SECONDS = 2 * 60
+
+
+def _lock_key(summary_id: UUID, language: str) -> str:
+    return f"sumtr:lock:{summary_id}:{language}"
+
+
+def _failed_key(summary_id: UUID, language: str) -> str:
+    return f"sumtr:failed:{summary_id}:{language}"
+
+
+def _redis():
+    from redis.asyncio import Redis
+
+    from app.core.config import get_settings
+
+    return Redis.from_url(get_settings().redis_url, decode_responses=True)
+
+
+async def stored_translation(
+    db: AsyncSession, summary: DocumentSummary, language: str
+) -> Optional[dict[str, Any]]:
+    """Translated content if it already exists (or nothing needs translating); never calls the LLM."""
+    if not summary.content:
+        return None
+    if not collect_prose(summary.content):
+        return summary.content
+    existing = await _existing_translation(db, summary.id, language)
+    return existing.content if existing else None
+
+
+async def request_translation(summary: DocumentSummary, language: str) -> str:
+    """Queue a background translation. Returns "pending" or "failed"."""
+    client = _redis()
+    try:
+        if await client.exists(_failed_key(summary.id, language)):
+            return "failed"
+        acquired = await client.set(
+            _lock_key(summary.id, language), "1", nx=True, ex=TRANSLATION_LOCK_SECONDS
+        )
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("Translation queue unavailable: %s", exc)
+        return "failed"
+    finally:
+        await client.aclose()
+    if acquired:
+        from app.workers.ingestion import enqueue_translation
+
+        try:
+            enqueue_translation(str(summary.id), language)
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("Could not enqueue translation for %s: %s", summary.id, exc)
+            await _finish_translation(summary.id, language, failed=True)
+            return "failed"
+    return "pending"
+
+
+async def _finish_translation(summary_id: UUID, language: str, *, failed: bool) -> None:
+    client = _redis()
+    try:
+        await client.delete(_lock_key(summary_id, language))
+        if failed:
+            await client.set(_failed_key(summary_id, language), "1", ex=TRANSLATION_FAILED_SECONDS)
+    finally:
+        await client.aclose()
+
+
+async def run_translation(db: AsyncSession, summary_id: UUID, language: str) -> bool:
+    """Worker entry point: translate and store, then release the lock."""
+    content: Optional[dict[str, Any]] = None
+    try:
+        summary = await db.get(DocumentSummary, summary_id)
+        if summary is not None:
+            content = await translate_summary(db, summary, language)
+    finally:
+        await _finish_translation(summary_id, language, failed=content is None)
+    return content is not None

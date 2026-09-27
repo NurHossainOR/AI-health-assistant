@@ -7,7 +7,12 @@ from app.models.document import (
     ExtractedField,
     ImagingStudy,
 )
-from app.models.summary import DocumentSummary, SummaryAudience, SummaryStatus
+from app.models.summary import (
+    DocumentSummary,
+    SummaryAudience,
+    SummaryStatus,
+    SummaryTranslation,
+)
 from app.models.user import (
     AuditLog,
     ConsentGrant,
@@ -46,4 +51,5 @@ __all__ = [
     "DocumentSummary",
     "SummaryAudience",
     "SummaryStatus",
+    "SummaryTranslation",
 ]

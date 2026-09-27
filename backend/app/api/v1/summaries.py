@@ -1,4 +1,4 @@
-from typing import Annotated, Optional
+from typing import Annotated, Literal, Optional
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, Query, Request, status
@@ -22,13 +22,34 @@ async def get_summary(
     user: Annotated[User, Depends(get_current_user)],
     audience: SummaryAudience = SummaryAudience.patient,
     version: Optional[int] = Query(None, ge=1),
+    lang: Literal["en", "bn"] = "en",
 ) -> SummaryOut:
     summary = await summary_service.get_summary(
-        db, user, document_id, audience, version=version, ip_address=client_ip(request)
+        db,
+        user,
+        document_id,
+        audience,
+        version=version,
+        language=lang,
+        ip_address=client_ip(request),
     )
     if summary is None:
-        return SummaryOut(status="pending", document_id=document_id, audience=audience)
-    return SummaryOut.model_validate(summary)
+        return SummaryOut(
+            status="pending", document_id=document_id, audience=audience, language=lang
+        )
+    out = SummaryOut.model_validate(summary)
+    if lang == "en" or out.status != "ready":
+        return out
+    translated = await summary_service.stored_translation(db, summary, lang)
+    if translated is not None:
+        return out.model_copy(update={"content": translated, "language": lang})
+    state = await summary_service.request_translation(summary, lang)
+    return out.model_copy(
+        update={
+            "translation_pending": state == "pending",
+            "translation_failed": state == "failed",
+        }
+    )
 
 
 @router.get("/{document_id}/versions", response_model=list[SummaryVersionOut])

@@ -219,6 +219,25 @@ def analyze_confirmed_document(self, document_id: str) -> str:
     return document_id
 
 
+@celery_app.task(bind=True)
+def translate_summary_task(self, summary_id: str, language: str) -> bool:
+    from app.services import summary_service
+
+    async def _go() -> bool:
+        async with worker_db() as db:
+            return await summary_service.run_translation(db, UUID(summary_id), language)
+
+    try:
+        return _run(_go())
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("Summary translation failed for %s (%s): %s", summary_id, language, exc)
+        return False
+
+
+def enqueue_translation(summary_id: str, language: str) -> None:
+    translate_summary_task.delay(summary_id, language)
+
+
 def enqueue_analysis(document_id: str) -> None:
     analyze_confirmed_document.delay(document_id)
 
