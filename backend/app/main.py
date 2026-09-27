@@ -12,6 +12,8 @@ from app.core.exceptions import AppError, app_error_handler
 from app.db.session import Base, engine
 from app.models import (  # noqa: F401 — register models on metadata
     AuditLog,
+    ChatMessage,
+    ChatSession,
     ConsentGrant,
     DoctorProfile,
     Document,
@@ -26,7 +28,12 @@ from app.models import (  # noqa: F401 — register models on metadata
 )
 from app.services import storage_service
 
-logging.basicConfig(level=logging.INFO)
+logging.basicConfig(level=logging.WARNING)
+logging.getLogger("sqlalchemy.engine").setLevel(logging.WARNING)
+logging.getLogger("sqlalchemy.pool").setLevel(logging.WARNING)
+logging.getLogger("uvicorn.access").setLevel(logging.WARNING)
+logging.getLogger("chromadb").setLevel(logging.ERROR)
+logging.getLogger("chromadb.telemetry").setLevel(logging.CRITICAL)
 logger = logging.getLogger(__name__)
 
 
@@ -66,6 +73,31 @@ RLS_SQL = [
         OR current_setting('app.bypass_rls', true) = 'on'
       )
     """,
+    "ALTER TABLE chat_sessions ENABLE ROW LEVEL SECURITY",
+    "DROP POLICY IF EXISTS chat_sessions_patient_scope ON chat_sessions",
+    """
+    CREATE POLICY chat_sessions_patient_scope ON chat_sessions
+      USING (
+        patient_id::text = current_setting('app.current_user_id', true)
+        OR current_setting('app.bypass_rls', true) = 'on'
+      )
+    """,
+    "ALTER TABLE chat_messages ENABLE ROW LEVEL SECURITY",
+    "DROP POLICY IF EXISTS chat_messages_patient_scope ON chat_messages",
+    """
+    CREATE POLICY chat_messages_patient_scope ON chat_messages
+      USING (
+        EXISTS (
+          SELECT 1 FROM chat_sessions s
+          WHERE s.id = chat_messages.session_id
+            AND (
+              s.patient_id::text = current_setting('app.current_user_id', true)
+              OR current_setting('app.bypass_rls', true) = 'on'
+            )
+        )
+        OR current_setting('app.bypass_rls', true) = 'on'
+      )
+    """,
 ]
 
 SCHEMA_PATCHES = [
@@ -89,12 +121,14 @@ SCHEMA_PATCHES = [
     "DROP INDEX IF EXISTS ix_doctor_profiles_npi_number",
     "CREATE INDEX IF NOT EXISTS ix_doctor_profiles_bmdc_registration_number ON doctor_profiles (bmdc_registration_number)",
     "ALTER TABLE documents ADD COLUMN IF NOT EXISTS display_name VARCHAR(255)",
+    "ALTER TABLE documents ADD COLUMN IF NOT EXISTS indexed_at TIMESTAMPTZ",
     "ALTER TYPE consent_scope ADD VALUE IF NOT EXISTS 'document'",
 ]
 
 
 async def init_db() -> None:
     async with engine.begin() as conn:
+        await conn.execute(text("CREATE EXTENSION IF NOT EXISTS pgcrypto"))
         await conn.run_sync(Base.metadata.create_all)
         # App role bypasses RLS for API layer; policies still defend direct DB access
         await conn.execute(text("SET app.bypass_rls = 'on'"))

@@ -19,31 +19,50 @@ from app.workers.celery_app import celery_app
 
 logger = logging.getLogger(__name__)
 
+_loop: asyncio.AbstractEventLoop | None = None
+_engine = None
+_session_factory = None
+
 
 def _utcnow():
     return datetime.now(timezone.utc)
 
 
+def _worker_loop() -> asyncio.AbstractEventLoop:
+    global _loop
+    if _loop is None or _loop.is_closed():
+        _loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(_loop)
+    return _loop
+
+
 def _run(coro):
-    return asyncio.run(coro)
+    return _worker_loop().run_until_complete(coro)
+
+
+def _sessionmaker():
+    global _engine, _session_factory
+    if _session_factory is None:
+        _engine = create_async_engine(
+            get_settings().database_url,
+            pool_pre_ping=True,
+        )
+        _session_factory = async_sessionmaker(
+            _engine, class_=AsyncSession, expire_on_commit=False, autoflush=False
+        )
+    return _session_factory
 
 
 @asynccontextmanager
 async def worker_db():
-    engine = create_async_engine(get_settings().database_url, pool_pre_ping=True)
-    factory = async_sessionmaker(
-        engine, class_=AsyncSession, expire_on_commit=False, autoflush=False
-    )
-    try:
-        async with factory() as db:
-            try:
-                yield db
-                await db.commit()
-            except Exception:
-                await db.rollback()
-                raise
-    finally:
-        await engine.dispose()
+    factory = _sessionmaker()
+    async with factory() as db:
+        try:
+            yield db
+            await db.commit()
+        except Exception:
+            await db.rollback()
+            raise
 
 
 async def _set_job(db, document_id: UUID, status: str, error: str | None = None, bump_retry: bool = False) -> None:
@@ -152,6 +171,23 @@ def normalize_and_score(self, document_id: str) -> str:
         _run(_go())
     except Exception as exc:
         _run(_fail(UUID(document_id), str(exc), self.request.retries))
+        raise
+    return document_id
+
+
+@celery_app.task(bind=True, autoretry_for=(Exception,), retry_backoff=True, retry_backoff_max=60, max_retries=3)
+def index_document_embeddings(self, document_id: str) -> str:
+    async def _go():
+        async with worker_db() as db:
+            uid = UUID(document_id)
+            from app.services import embedding_service
+
+            await embedding_service.index_document(db, uid)
+
+    try:
+        _run(_go())
+    except Exception as exc:
+        logger.warning("Embedding index failed for %s: %s", document_id, exc)
         raise
     return document_id
 

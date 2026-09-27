@@ -80,6 +80,9 @@ class Document(Base):
     confirmed_at: Mapped[Optional[datetime]] = mapped_column(
         DateTime(timezone=True), nullable=True
     )
+    indexed_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
 
     pages: Mapped[list["DocumentPage"]] = relationship(
         back_populates="document", cascade="all, delete-orphan"

@@ -16,6 +16,16 @@ services:
       timeout: 5s
       retries: 10
 
+  chroma:
+    image: chromadb/chroma:0.6.3
+    ports:
+      - "8001:8000"
+    environment:
+      IS_PERSISTENT: "TRUE"
+      ANONYMIZED_TELEMETRY: "FALSE"
+    volumes:
+      - chromadata:/chroma/chroma
+
   redis:
     image: redis:7-alpine
     ports:
@@ -38,12 +48,14 @@ services:
       DATABASE_URL: postgresql+asyncpg://health:health_dev_password@db:5432/health_intelligence
       JWT_PRIVATE_KEY_PATH: /keys/jwt_private.pem
       JWT_PUBLIC_KEY_PATH: /keys/jwt_public.pem
-      DEBUG: "true"
+      DEBUG: "false"
       CORS_ORIGINS: '["http://localhost:3000","http://127.0.0.1:3000","http://localhost:5173","http://127.0.0.1:5173"]'
       FRONTEND_URL: http://localhost:3000
       SECRET_KEY: ${SECRET_KEY:-dev-only-secret-key-replace-via-vault}
       REDIS_URL: redis://redis:6379/0
       CELERY_BROKER_URL: redis://redis:6379/0
+      CHROMA_HOST: chroma
+      CHROMA_PORT: "8000"
     volumes:
       - ./keys:/keys:ro
     depends_on:
@@ -51,6 +63,8 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+      chroma:
+        condition: service_started
 
   worker:
     build:
@@ -58,16 +72,18 @@ services:
     env_file:
       - path: ./backend/.env
         required: false
-    command: celery -A app.workers.celery_app worker --loglevel=info
+    command: celery -A app.workers.celery_app worker --loglevel=warning
     environment:
       DATABASE_URL: postgresql+asyncpg://health:health_dev_password@db:5432/health_intelligence
       JWT_PRIVATE_KEY_PATH: /keys/jwt_private.pem
       JWT_PUBLIC_KEY_PATH: /keys/jwt_public.pem
-      DEBUG: "true"
+      DEBUG: "false"
       FRONTEND_URL: http://localhost:3000
       SECRET_KEY: ${SECRET_KEY:-dev-only-secret-key-replace-via-vault}
       REDIS_URL: redis://redis:6379/0
       CELERY_BROKER_URL: redis://redis:6379/0
+      CHROMA_HOST: chroma
+      CHROMA_PORT: "8000"
     volumes:
       - ./keys:/keys:ro
     depends_on:
@@ -75,6 +91,8 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+      chroma:
+        condition: service_started
 
   web:
     build:
@@ -93,3 +111,4 @@ services:
 
 volumes:
   pgdata:
+  chromadata:

@@ -130,14 +130,23 @@ async def _status_payload(db: AsyncSession, doc: Document) -> dict:
     }
 
 
-async def _latest_job(db: AsyncSession, document_id: UUID) -> Optional[IngestionJob]:
+async def _latest_jobs_map(
+    db: AsyncSession, document_ids: list[UUID]
+) -> dict[UUID, IngestionJob]:
+    if not document_ids:
+        return {}
     result = await db.execute(
         select(IngestionJob)
-        .where(IngestionJob.document_id == document_id)
-        .order_by(IngestionJob.created_at.desc())
-        .limit(1)
+        .where(IngestionJob.document_id.in_(document_ids))
+        .distinct(IngestionJob.document_id)
+        .order_by(IngestionJob.document_id, IngestionJob.created_at.desc())
     )
-    return result.scalar_one_or_none()
+    return {job.document_id: job for job in result.scalars().all()}
+
+
+async def _latest_job(db: AsyncSession, document_id: UUID) -> Optional[IngestionJob]:
+    jobs = await _latest_jobs_map(db, [document_id])
+    return jobs.get(document_id)
 
 
 def _to_out(doc: Document, retry_count: int = 0) -> DocumentOut:
@@ -369,11 +378,8 @@ async def list_documents(db: AsyncSession, user: User) -> list[DocumentOut]:
         q.where(Document.status != DocumentStatus.awaiting_upload).order_by(Document.uploaded_at.desc())
     )
     docs = list(result.scalars().all())
-    outs: list[DocumentOut] = []
-    for d in docs:
-        job = await _latest_job(db, d.id)
-        outs.append(_to_out(d, job.retry_count if job else 0))
-    return outs
+    jobs = await _latest_jobs_map(db, [d.id for d in docs])
+    return [_to_out(d, jobs[d.id].retry_count if d.id in jobs else 0) for d in docs]
 
 
 async def patch_document(
@@ -454,6 +460,12 @@ async def confirm_document(
         resource_id=str(doc.id),
         ip_address=ip_address,
     )
+    try:
+        from app.services import embedding_service
+
+        await embedding_service.index_document(db, doc.id)
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("Embedding index after confirm failed for %s: %s", doc.id, exc)
     await publish_document_status(doc.id, await _status_payload(db, doc))
     job = await _latest_job(db, doc.id)
     return _to_status(doc, job.retry_count if job else 0)
@@ -497,7 +509,7 @@ async def get_file(
     doc = await _get_accessible(db, user, document_id)
     if doc.status == DocumentStatus.awaiting_upload:
         raise AppError("File is not available yet", status_code=404)
-    data = storage_service.get_object_bytes(doc.storage_key)
+    data = await storage_service.aget_object_bytes(doc.storage_key)
     mime_type = doc.mime_type
     filename = doc.original_filename
     if dicom_preview.is_dicom(mime_type, filename, data):

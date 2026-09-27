@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import hashlib
 import logging
 import re
@@ -266,6 +267,10 @@ def get_object_bytes(storage_key: str) -> bytes:
         return resp["Body"].read()
     except ClientError as exc:
         raise AppError("Could not read uploaded file", status_code=400, code="missing_object") from exc
+
+
+async def aget_object_bytes(storage_key: str) -> bytes:
+    return await asyncio.to_thread(get_object_bytes, storage_key)
 
 
 def delete_object(storage_key: str) -> None:

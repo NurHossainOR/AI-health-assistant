@@ -1,3 +1,4 @@
+from app.models.chat import ChatMessage, ChatRole, ChatSession
 from app.models.document import (
     DocType,
     Document,
@@ -38,4 +39,7 @@ __all__ = [
     "ImagingStudy",
     "DocType",
     "DocumentStatus",
+    "ChatSession",
+    "ChatMessage",
+    "ChatRole",
 ]
