@@ -28,6 +28,16 @@ from app.services.rag_queries import (
 logger = logging.getLogger(__name__)
 
 INSUFFICIENT_REPLY = "I don't see that in your records"
+INSUFFICIENT_REPLY_BN = "আপনার রেকর্ডে আমি এটি দেখতে পাচ্ছি না"
+INSUFFICIENT_REPLIES = {"en": INSUFFICIENT_REPLY, "bn": INSUFFICIENT_REPLY_BN}
+
+LANGUAGE_RULES = {
+    "bn": (
+        "\nLANGUAGE: Write the entire answer in simple, natural Bangla (বাংলা). Keep medical test "
+        "names, abbreviations, numbers, units, dates and [Source N] markers exactly as written. "
+        f'If the answer is not in the context, reply exactly "{INSUFFICIENT_REPLY_BN}".\n'
+    ),
+}
 
 GROUNDED_SYSTEM_PROMPT = """You are an expert medical records analyst for one patient. You answer questions using only the retrieved context from that patient's uploaded medical documents.
 STRICT RULES:
@@ -589,6 +599,15 @@ async def persist_assistant_message(
     return message
 
 
+def system_prompt_for(language: str) -> str:
+    return GROUNDED_SYSTEM_PROMPT + LANGUAGE_RULES.get(language, "")
+
+
+def is_insufficient_reply(text: str) -> bool:
+    lowered = text.strip().lower()
+    return any(lowered.startswith(reply.lower()) for reply in INSUFFICIENT_REPLIES.values())
+
+
 def sse_pack(event: str, data: dict[str, Any]) -> str:
     return f"event: {event}\ndata: {json.dumps(data)}\n\n"
 
@@ -623,8 +642,10 @@ async def stream_answer(
     user: User,
     session: ChatSession,
     query: str,
+    language: str = "en",
     ip_address: Optional[str] = None,
 ) -> AsyncIterator[str]:
+    insufficient_reply = INSUFFICIENT_REPLIES.get(language, INSUFFICIENT_REPLY)
     intent = await classify_intent(query)
     chunks = await retrieve_for_query(db, session.patient_id, query, intent)
     await write_retrieval_audit(
@@ -655,13 +676,13 @@ async def stream_answer(
             db,
             user=user,
             session=session,
-            content=INSUFFICIENT_REPLY,
+            content=insufficient_reply,
             chunks=[],
             insufficient=True,
             ip_address=ip_address,
         )
         await db.commit()
-        yield sse_pack("token", {"text": INSUFFICIENT_REPLY})
+        yield sse_pack("token", {"text": insufficient_reply})
         yield sse_pack(
             "done",
             {
@@ -680,7 +701,7 @@ async def stream_answer(
     collected: list[str] = []
     try:
         async for token in langchain_llm.stream_grounded_answer(
-            system_prompt=GROUNDED_SYSTEM_PROMPT,
+            system_prompt=system_prompt_for(language),
             context=format_context(chunks),
             query=query,
             history=history,
@@ -720,8 +741,8 @@ async def stream_answer(
         yield sse_pack("error", {"detail": fail_text})
         return
 
-    text = "".join(collected).strip() or INSUFFICIENT_REPLY
-    looks_empty = text.lower().startswith("i don't see that in your records")
+    text = "".join(collected).strip() or insufficient_reply
+    looks_empty = is_insufficient_reply(text)
     assistant = await persist_assistant_message(
         db,
         user=user,

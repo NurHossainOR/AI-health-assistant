@@ -1,5 +1,5 @@
 from datetime import datetime
-from typing import Any, Optional
+from typing import Any, Literal, Optional
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -23,6 +23,7 @@ class ChatSessionOut(BaseModel):
 
 class ChatMessageIn(BaseModel):
     content: str = Field(min_length=1, max_length=4000)
+    language: Literal["en", "bn"] = "en"
 
 
 class CitationOut(BaseModel):

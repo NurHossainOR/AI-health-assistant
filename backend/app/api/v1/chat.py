@@ -70,6 +70,7 @@ async def send_message(
                     user=user,
                     session=stream_session,
                     query=query,
+                    language=body.language,
                     ip_address=ip_address,
                 ):
                     yield chunk
