@@ -9,6 +9,7 @@ from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from jose import JWTError
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from app.core.exceptions import AppError, raise_forbidden, raise_unauthorized
 from app.core.security import decode_token
@@ -106,25 +107,25 @@ async def list_users_admin(
     *,
     role: Optional[UserRole] = None,
     status: Optional[UserStatus] = None,
+    limit: int = 200,
 ) -> list[AdminUserOut]:
-    q = select(User)
+    q = select(User).options(selectinload(User.doctor_profile))
     if role:
         q = q.where(User.role == role)
     if status:
         q = q.where(User.status == status)
-    result = await db.execute(q.order_by(User.created_at.desc()))
+    result = await db.execute(q.order_by(User.created_at.desc()).limit(max(1, min(limit, 500))))
     users = result.scalars().all()
     outs: list[AdminUserOut] = []
     for u in users:
+        dp = u.doctor_profile if u.role == UserRole.doctor else None
         bmdc_registration_number = specialty = verified_at = None
-        if u.role == UserRole.doctor:
-            dp = await db.get(DoctorProfile, u.id)
-            if dp:
-                bmdc_registration_number, specialty, verified_at = (
-                    dp.bmdc_registration_number,
-                    dp.specialty,
-                    dp.verified_at,
-                )
+        if dp:
+            bmdc_registration_number, specialty, verified_at = (
+                dp.bmdc_registration_number,
+                dp.specialty,
+                dp.verified_at,
+            )
         base = UserOut.model_validate(u)
         outs.append(
             AdminUserOut(

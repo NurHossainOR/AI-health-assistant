@@ -27,8 +27,9 @@ async def list_users(
     _: Annotated[User, Depends(require_role(["admin"]))],
     role: Optional[UserRole] = None,
     status: Optional[UserStatus] = None,
+    limit: int = Query(200, ge=1, le=500),
 ) -> list[AdminUserOut]:
-    return await list_users_admin(db, role=role, status=status)
+    return await list_users_admin(db, role=role, status=status, limit=limit)
 
 
 @router.post("/users/{user_id}/approve-doctor", response_model=AdminUserOut)
