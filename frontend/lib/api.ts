@@ -31,6 +31,16 @@ async function parseJson(res: Response) {
   }
 }
 
+export async function refreshAccessToken() {
+  const refreshed = await apiFetch<{ access_token: string }>(
+    '/api/v1/auth/refresh',
+    { method: 'POST', body: JSON.stringify({}) },
+    false,
+  )
+  setAccessToken(refreshed.access_token)
+  return refreshed.access_token
+}
+
 export async function apiFetch<T>(
   path: string,
   options: RequestInit = {},
@@ -52,12 +62,7 @@ export async function apiFetch<T>(
 
   if (res.status === 401 && retry && path !== '/api/v1/auth/refresh') {
     try {
-      const refreshed = await apiFetch<{ access_token: string }>(
-        '/api/v1/auth/refresh',
-        { method: 'POST', body: JSON.stringify({}) },
-        false,
-      )
-      setAccessToken(refreshed.access_token)
+      await refreshAccessToken()
       return apiFetch<T>(path, options, false)
     } catch {
       setAccessToken(null)
@@ -91,12 +96,7 @@ export async function apiFetchBlob(
   })
   if (res.status === 401 && retry && path !== '/api/v1/auth/refresh') {
     try {
-      const refreshed = await apiFetch<{ access_token: string }>(
-        '/api/v1/auth/refresh',
-        { method: 'POST', body: JSON.stringify({}) },
-        false,
-      )
-      setAccessToken(refreshed.access_token)
+      await refreshAccessToken()
       return apiFetchBlob(path, options, false)
     } catch {
       setAccessToken(null)

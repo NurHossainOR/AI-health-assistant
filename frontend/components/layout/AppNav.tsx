@@ -31,6 +31,7 @@ export function AppNav({ extra }: { extra?: ReactNode }) {
         <div className="nav-links">
           <Link href="/dashboard">Dashboard</Link>
           {user?.role === 'patient' && <Link href="/upload">Upload</Link>}
+          {user?.role === 'patient' && <Link href="/chat">Ask records</Link>}
           {user && <Link href="/privacy">Privacy</Link>}
           <Link href="/mfa">MFA settings</Link>
           {user?.role === 'admin' && <Link href="/admin">Admin console</Link>}
