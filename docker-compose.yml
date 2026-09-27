@@ -98,7 +98,8 @@ services:
     build:
       context: ./frontend
     ports:
-      - "3000:3000"
+      # Host port is assigned by Docker; find it with `docker compose port web 3000`
+      - "3000"
     environment:
       API_PROXY_TARGET: http://api:8000
     volumes:
