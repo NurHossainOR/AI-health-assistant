@@ -131,6 +131,8 @@ class ExtractedField(Base):
     observed_at: Mapped[Optional[str]] = mapped_column(String(32), nullable=True)
     source_confidence: Mapped[float] = mapped_column(Float, nullable=False, default=0.0)
     canonical_code: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
+    # normal | borderline | abnormal | critical | unknown — set by trend_service on confirm
+    flag: Mapped[Optional[str]] = mapped_column(String(16), nullable=True)
 
     document: Mapped["Document"] = relationship(back_populates="extracted_fields")
 

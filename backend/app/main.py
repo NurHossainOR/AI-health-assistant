@@ -123,6 +123,7 @@ SCHEMA_PATCHES = [
     "ALTER TABLE documents ADD COLUMN IF NOT EXISTS display_name VARCHAR(255)",
     "ALTER TABLE documents ADD COLUMN IF NOT EXISTS indexed_at TIMESTAMPTZ",
     "ALTER TYPE consent_scope ADD VALUE IF NOT EXISTS 'document'",
+    "ALTER TABLE extracted_fields ADD COLUMN IF NOT EXISTS flag VARCHAR(16)",
 ]
 
 

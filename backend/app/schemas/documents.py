@@ -55,6 +55,7 @@ class ExtractedFieldOut(BaseModel):
     observed_at: Optional[str] = None
     source_confidence: float
     canonical_code: Optional[str] = None
+    flag: Optional[str] = None
 
 
 class ExtractedFieldsPatch(BaseModel):

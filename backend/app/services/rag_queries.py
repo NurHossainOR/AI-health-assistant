@@ -59,3 +59,23 @@ def patient_scoped_imaging_query(patient_id: UUID, *, limit: int = 12) -> Select
         .order_by(Document.uploaded_at.desc())
         .limit(limit)
     )
+
+
+def patient_scoped_lab_query(
+    patient_id: UUID,
+    *,
+    document_ids: Sequence[UUID] | None = None,
+) -> Select:
+    """Every confirmed lab field for one patient, optionally narrowed to specific documents."""
+    stmt = (
+        select(ExtractedField, Document)
+        .join(Document, ExtractedField.document_id == Document.id)
+        .where(
+            Document.patient_id == patient_id,
+            Document.status == DocumentStatus.confirmed,
+            ExtractedField.field_type == "lab",
+        )
+    )
+    if document_ids is not None:
+        stmt = stmt.where(Document.id.in_(list(document_ids)))
+    return stmt.order_by(Document.uploaded_at.asc())

@@ -18,53 +18,36 @@ from app.models.document import (
     ExtractedField,
     ImagingStudy,
 )
-from app.services import langchain_llm, storage_service
+from app.services import lab_catalog, langchain_llm, storage_service
 
 logger = logging.getLogger(__name__)
 
 CONFIDENCE_THRESHOLD = 0.75
 
+# Regex fallback patterns; names, codes, units and ranges come from the lab catalog.
+_LAB_PATTERNS: list[tuple[str, re.Pattern[str]]] = [
+    ("ldl", re.compile(r"LDL[^0-9]{0,24}(\d+(?:\.\d+)?)\s*(mg/?dL|mmol/L)?", re.I)),
+    ("hdl", re.compile(r"HDL[^0-9]{0,24}(\d+(?:\.\d+)?)\s*(mg/?dL|mmol/L)?", re.I)),
+    ("triglycerides", re.compile(r"Triglycerides?[^0-9]{0,24}(\d+(?:\.\d+)?)\s*(mg/?dL)?", re.I)),
+    ("hba1c", re.compile(r"(?:HbA1c|A1C|Hemoglobin A1c)[^0-9]{0,24}(\d+(?:\.\d+)?)\s*%?", re.I)),
+    ("glucose", re.compile(r"(?:Glucose|FBS|FBG)[^0-9]{0,24}(\d+(?:\.\d+)?)\s*(mg/?dL)?", re.I)),
+]
+
+
+def _range_str(value: Optional[float]) -> Optional[str]:
+    return None if value is None else f"{value:g}"
+
+
 LAB_SPECS: list[dict[str, Any]] = [
     {
-        "name": "LDL Cholesterol",
-        "code": "13457-7",
-        "pattern": re.compile(r"LDL[^0-9]{0,24}(\d+(?:\.\d+)?)\s*(mg/?dL|mmol/L)?", re.I),
-        "unit": "mg/dL",
-        "low": None,
-        "high": "130",
-    },
-    {
-        "name": "HDL Cholesterol",
-        "code": "2085-9",
-        "pattern": re.compile(r"HDL[^0-9]{0,24}(\d+(?:\.\d+)?)\s*(mg/?dL|mmol/L)?", re.I),
-        "unit": "mg/dL",
-        "low": "40",
-        "high": None,
-    },
-    {
-        "name": "Triglycerides",
-        "code": "2571-8",
-        "pattern": re.compile(r"Triglycerides?[^0-9]{0,24}(\d+(?:\.\d+)?)\s*(mg/?dL)?", re.I),
-        "unit": "mg/dL",
-        "low": None,
-        "high": "150",
-    },
-    {
-        "name": "Hemoglobin A1c",
-        "code": "4548-4",
-        "pattern": re.compile(r"(?:HbA1c|A1C|Hemoglobin A1c)[^0-9]{0,24}(\d+(?:\.\d+)?)\s*%?", re.I),
-        "unit": "%",
-        "low": "4.0",
-        "high": "5.6",
-    },
-    {
-        "name": "Glucose",
-        "code": "2345-7",
-        "pattern": re.compile(r"(?:Glucose|FBS|FBG)[^0-9]{0,24}(\d+(?:\.\d+)?)\s*(mg/?dL)?", re.I),
-        "unit": "mg/dL",
-        "low": "70",
-        "high": "99",
-    },
+        "name": lab_catalog.BY_KEY[key].name,
+        "code": lab_catalog.BY_KEY[key].loinc,
+        "pattern": pattern,
+        "unit": lab_catalog.BY_KEY[key].unit,
+        "low": _range_str(lab_catalog.BY_KEY[key].low),
+        "high": _range_str(lab_catalog.BY_KEY[key].high),
+    }
+    for key, pattern in _LAB_PATTERNS
 ]
 
 RX_PATTERN = re.compile(
