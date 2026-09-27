@@ -22,6 +22,17 @@ from app.services.vector_filters import patient_metadata_filter
 logger = logging.getLogger(__name__)
 
 
+def _ensure_event_loop() -> None:
+    """Chroma/GoogleGenerativeAI internals call asyncio.get_event_loop(), which
+    raises in a plain thread-pool worker thread that was never given one
+    (e.g. threads spawned by asyncio.to_thread). Give the current thread a
+    loop before running any Chroma/embedding call from it."""
+    try:
+        asyncio.get_event_loop()
+    except RuntimeError:
+        asyncio.set_event_loop(asyncio.new_event_loop())
+
+
 def _embedding_model_name() -> str:
     name = get_settings().gemini_embedding_model
     if not name.startswith("models/"):
@@ -66,6 +77,7 @@ def get_vectorstore() -> Chroma:
 
 
 def delete_document_chunks(document_id: UUID | str) -> None:
+    _ensure_event_loop()
     settings = get_settings()
     collection = get_chroma_client().get_or_create_collection(settings.chroma_collection)
     collection.delete(where={"document_id": str(document_id)})
@@ -74,6 +86,7 @@ def delete_document_chunks(document_id: UUID | str) -> None:
 def add_chunks(passages: list[dict[str, Any]]) -> int:
     if not passages:
         return 0
+    _ensure_event_loop()
     documents = [
         LCDocument(page_content=item["chunk_text"], metadata=item["metadata"])
         for item in passages
@@ -87,6 +100,7 @@ def add_chunks(passages: list[dict[str, Any]]) -> int:
 
 
 def has_document_chunks(document_id: UUID | str) -> bool:
+    _ensure_event_loop()
     client = get_chroma_client()
     settings = get_settings()
     collection = client.get_or_create_collection(settings.chroma_collection)
@@ -96,6 +110,7 @@ def has_document_chunks(document_id: UUID | str) -> bool:
 
 def similarity_search(query: str, patient_id: UUID, *, k: int) -> list[LCDocument]:
     """LangChain similarity search, always scoped to one patient_id."""
+    _ensure_event_loop()
     filt = patient_metadata_filter(patient_id)
     docs = get_vectorstore().similarity_search(query, k=k, filter=filt)
     scoped: list[LCDocument] = []
