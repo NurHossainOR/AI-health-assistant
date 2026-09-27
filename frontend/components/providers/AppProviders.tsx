@@ -5,7 +5,14 @@ import { useState, type ReactNode } from 'react'
 import { AuthProvider } from '@/components/providers/AuthProvider'
 
 export function AppProviders({ children }: { children: ReactNode }) {
-  const [queryClient] = useState(() => new QueryClient())
+  const [queryClient] = useState(
+    () =>
+      new QueryClient({
+        defaultOptions: {
+          queries: { staleTime: 30_000, retry: 1 },
+        },
+      }),
+  )
 
   return (
     <QueryClientProvider client={queryClient}>

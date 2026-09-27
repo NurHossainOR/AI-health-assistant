@@ -1,6 +1,7 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import { useMemo, useState } from 'react'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { apiFetch } from '@/lib/api'
 import type { ConsentGrant, VerifiedDoctor } from '@/types/auth'
 import type { HealthDocument } from '@/types/documents'
@@ -22,13 +23,27 @@ function grantLabel(g: ConsentGrant) {
 }
 
 export function ConsentManager() {
-  const [grants, setGrants] = useState<ConsentGrant[]>([])
-  const [doctors, setDoctors] = useState<VerifiedDoctor[]>([])
-  const [documents, setDocuments] = useState<HealthDocument[]>([])
+  const queryClient = useQueryClient()
   const [granteeId, setGranteeId] = useState('')
   const [documentId, setDocumentId] = useState('')
   const [error, setError] = useState<string | null>(null)
-  const [pending, setPending] = useState(false)
+
+  const grantsQuery = useQuery({
+    queryKey: ['consent-grants'],
+    queryFn: () => apiFetch<ConsentGrant[]>('/api/v1/consent/grants'),
+  })
+  const doctorsQuery = useQuery({
+    queryKey: ['consent-doctors'],
+    queryFn: () => apiFetch<VerifiedDoctor[]>('/api/v1/consent/doctors'),
+  })
+  const documentsQuery = useQuery({
+    queryKey: ['documents'],
+    queryFn: () => apiFetch<HealthDocument[]>('/api/v1/documents'),
+  })
+
+  const grants = grantsQuery.data ?? []
+  const doctors = doctorsQuery.data ?? []
+  const documents = documentsQuery.data ?? []
 
   const shareable = useMemo(
     () => documents.filter((d) => SHAREABLE_STATUSES.includes(d.status)),
@@ -37,47 +52,59 @@ export function ConsentManager() {
 
   const selectedDoc = shareable.find((d) => d.id === documentId)
 
-  async function load() {
-    const [grantData, doctorData, docData] = await Promise.all([
-      apiFetch<ConsentGrant[]>('/api/v1/consent/grants'),
-      apiFetch<VerifiedDoctor[]>('/api/v1/consent/doctors'),
-      apiFetch<HealthDocument[]>('/api/v1/documents'),
+  async function invalidateSharing() {
+    await Promise.all([
+      queryClient.invalidateQueries({ queryKey: ['consent-grants'] }),
+      queryClient.invalidateQueries({ queryKey: ['documents'] }),
     ])
-    setGrants(grantData)
-    setDoctors(doctorData)
-    setDocuments(docData)
   }
 
-  useEffect(() => {
-    void load().catch((e) => setError(e instanceof Error ? e.message : 'Failed to load sharing'))
-  }, [])
-
-  async function grantAccess() {
-    setError(null)
-    setPending(true)
-    try {
-      await apiFetch('/api/v1/consent/grants', {
+  const grantMutation = useMutation({
+    mutationFn: () =>
+      apiFetch('/api/v1/consent/grants', {
         method: 'POST',
         body: JSON.stringify({
           grantee_id: granteeId,
           scope: 'document',
           scope_detail: { document_id: documentId },
         }),
-      })
+      }),
+    onSuccess: async () => {
       setDocumentId('')
-      await load()
+      await invalidateSharing()
+    },
+  })
+
+  const revokeMutation = useMutation({
+    mutationFn: (id: string) => apiFetch(`/api/v1/consent/grants/${id}`, { method: 'DELETE' }),
+    onSuccess: () => invalidateSharing(),
+  })
+
+  async function grantAccess() {
+    setError(null)
+    try {
+      await grantMutation.mutateAsync()
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to grant access')
-    } finally {
-      setPending(false)
     }
   }
 
   async function revoke(id: string) {
-    await apiFetch(`/api/v1/consent/grants/${id}`, { method: 'DELETE' })
-    await load()
+    setError(null)
+    try {
+      await revokeMutation.mutateAsync(id)
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Failed to revoke access')
+    }
   }
 
+  const loadError =
+    error ||
+    (grantsQuery.error instanceof Error && grantsQuery.error.message) ||
+    (doctorsQuery.error instanceof Error && doctorsQuery.error.message) ||
+    (documentsQuery.error instanceof Error && documentsQuery.error.message) ||
+    null
+  const pending = grantMutation.isPending
   const activeGrants = grants.filter((g) => !g.revoked_at)
   const canGrant = Boolean(granteeId && documentId) && !pending
 
@@ -91,7 +118,7 @@ export function ConsentManager() {
         </p>
       </div>
 
-      {error && <p className="form-error">{error}</p>}
+      {loadError && <p className="form-error">{loadError}</p>}
 
       <div style={{ display: 'grid', gap: '1rem', marginBottom: '2rem' }}>
         <label>

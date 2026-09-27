@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useQuery } from '@tanstack/react-query'
 import Link from 'next/link'
 import { useAuth } from '@/components/providers/AuthProvider'
 import { MfaSetup } from '@/components/auth/MfaSetup'
@@ -13,14 +13,12 @@ import { documentDisplayName, documentShareLabel } from '@/types/documents'
 
 export function DashboardView() {
   const { user } = useAuth()
-  const [docs, setDocs] = useState<HealthDocument[]>([])
-
-  useEffect(() => {
-    if (!user || user.role === 'admin') return
-    void apiFetch<HealthDocument[]>('/api/v1/documents')
-      .then(setDocs)
-      .catch(() => setDocs([]))
-  }, [user])
+  const docsQuery = useQuery({
+    queryKey: ['documents'],
+    queryFn: () => apiFetch<HealthDocument[]>('/api/v1/documents'),
+    enabled: Boolean(user) && user?.role !== 'admin',
+  })
+  const docs = docsQuery.data ?? []
 
   if (!user) return null
 
@@ -46,9 +44,14 @@ export function DashboardView() {
             </p>
           </div>
           {user.role === 'patient' && (
-            <Link href="/upload" className="btn btn-primary">
-              Upload a report
-            </Link>
+            <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap' }}>
+              <Link href="/upload" className="btn btn-primary">
+                Upload a report
+              </Link>
+              <Link href="/chat" className="btn btn-ghost">
+                Ask about records
+              </Link>
+            </div>
           )}
         </header>
 
@@ -58,11 +61,17 @@ export function DashboardView() {
         {user.role === 'patient' && (
           <section className="panel">
             <h2>Your health timeline</h2>
-            <p style={{ marginBottom: '1rem' }} className="muted">
-              {docs.length === 0
-                ? 'Upload your first report to get started. We\'ll track it over time and explain what changed.'
-                : `${docs.length} document${docs.length === 1 ? '' : 's'} in your record.`}
-            </p>
+            {docsQuery.isError ? (
+              <p className="form-error">Could not load your reports. Refresh to try again.</p>
+            ) : (
+              <p style={{ marginBottom: '1rem' }} className="muted">
+                {docsQuery.isLoading
+                  ? 'Loading your reports…'
+                  : docs.length === 0
+                    ? "Upload your first report to get started. We'll track it over time and explain what changed."
+                    : `${docs.length} document${docs.length === 1 ? '' : 's'} in your record.`}
+              </p>
+            )}
             <div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap' }}>
               <div className="stat-card">
                 <div className="value">{docs.length}</div>
@@ -83,7 +92,11 @@ export function DashboardView() {
         {(user.role === 'doctor' || user.role === 'caregiver') && (
           <section className="panel">
             <h2>Patient records</h2>
-            {docs.length === 0 ? (
+            {docsQuery.isError ? (
+              <p className="form-error">Could not load shared records. Refresh to try again.</p>
+            ) : docsQuery.isLoading ? (
+              <p className="muted">Loading shared records…</p>
+            ) : docs.length === 0 ? (
               <p className="muted">
                 Patients who grant you access will appear here. You&apos;ll see their reports in both
                 clinical and patient-friendly formats.
