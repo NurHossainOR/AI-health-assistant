@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,300;9..144,450;9..144,560;9..144,680&family=Public+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,300;9..144,450;9..144,560;9..144,680&family=Public+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&family=Noto+Sans+Bengali:wght@400;500;600;700&display=swap');
 
 :root {
   --paper: #FBF8F3;
@@ -29,7 +29,7 @@ html {
 body {
   background: var(--paper);
   color: var(--ink);
-  font-family: 'Public Sans', system-ui, sans-serif;
+  font-family: 'Public Sans', 'Noto Sans Bengali', system-ui, sans-serif;
   -webkit-font-smoothing: antialiased;
   overflow-x: hidden;
   line-height: 1.5;
@@ -1720,4 +1720,37 @@ button.btn {
   .trend-grid {
     grid-template-columns: 1fr;
   }
+}
+
+/* ========== LANGUAGE TOGGLE ========== */
+.lang-toggle {
+  display: inline-flex;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  overflow: hidden;
+  background: #fff;
+}
+
+.lang-toggle button {
+  width: auto;
+  border: none;
+  background: transparent;
+  padding: 6px 12px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ink-soft);
+  cursor: pointer;
+  font-family: 'Public Sans', 'Noto Sans Bengali', system-ui, sans-serif;
+}
+
+.lang-toggle button.active {
+  background: var(--ink);
+  color: var(--paper);
+}
+
+html[lang='bn'] .summary-body,
+html[lang='bn'] .summary-disclaimer,
+html[lang='bn'] .chat-bubble-text {
+  font-family: 'Noto Sans Bengali', 'Public Sans', system-ui, sans-serif;
+  line-height: 1.7;
 }
