@@ -18,6 +18,7 @@ from app.models import (  # noqa: F401 — register models on metadata
     DoctorProfile,
     Document,
     DocumentPage,
+    DocumentSummary,
     ExtractedField,
     ImagingStudy,
     IngestionJob,
@@ -77,6 +78,15 @@ RLS_SQL = [
     "DROP POLICY IF EXISTS chat_sessions_patient_scope ON chat_sessions",
     """
     CREATE POLICY chat_sessions_patient_scope ON chat_sessions
+      USING (
+        patient_id::text = current_setting('app.current_user_id', true)
+        OR current_setting('app.bypass_rls', true) = 'on'
+      )
+    """,
+    "ALTER TABLE document_summaries ENABLE ROW LEVEL SECURITY",
+    "DROP POLICY IF EXISTS document_summaries_patient_scope ON document_summaries",
+    """
+    CREATE POLICY document_summaries_patient_scope ON document_summaries
       USING (
         patient_id::text = current_setting('app.current_user_id', true)
         OR current_setting('app.bypass_rls', true) = 'on'

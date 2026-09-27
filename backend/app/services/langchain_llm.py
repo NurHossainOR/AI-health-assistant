@@ -153,19 +153,28 @@ def parse_llm_json(text: str) -> Optional[dict[str, Any]]:
     return parsed if isinstance(parsed, dict) else None
 
 
-async def classify_json(prompt: str) -> Optional[dict[str, Any]]:
+async def generate_json(
+    prompt: str,
+    *,
+    system: str = "Respond with JSON only. No markdown.",
+    temperature: float = 0.0,
+) -> Optional[dict[str, Any]]:
     try:
-        llm = get_chat_llm(temperature=0.0)
+        llm = get_chat_llm(temperature=temperature)
         result = await llm.ainvoke(
             [
-                SystemMessage(content="Respond with JSON only. No markdown."),
+                SystemMessage(content=system),
                 HumanMessage(content=prompt),
             ]
         )
         return parse_llm_json(message_text(result))
     except Exception as exc:  # noqa: BLE001
-        logger.warning("LangChain intent classify skipped: %s", type(exc).__name__)
+        logger.warning("LangChain JSON generation skipped: %s", type(exc).__name__)
         return None
+
+
+async def classify_json(prompt: str) -> Optional[dict[str, Any]]:
+    return await generate_json(prompt)
 
 
 def _media_parts(mime_type: str, data: bytes, extra_text: str) -> list[dict[str, Any]]:

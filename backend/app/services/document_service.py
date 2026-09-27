@@ -23,7 +23,7 @@ from app.schemas.documents import (
     UploadUrlRequest,
     UploadUrlResponse,
 )
-from app.services import dicom_preview, storage_service
+from app.services import dicom_preview, storage_service, trend_service
 from app.services.audit_service import write_audit_log
 from app.services.consent_service import can_access_document
 
@@ -460,12 +460,15 @@ async def confirm_document(
         resource_id=str(doc.id),
         ip_address=ip_address,
     )
+    await trend_service.apply_flags(db, doc.id)
+    # Commit before enqueueing so the worker sees the confirmed status and flags.
+    await db.commit()
     try:
-        from app.services import embedding_service
+        from app.workers.ingestion import enqueue_analysis
 
-        await embedding_service.index_document(db, doc.id)
+        enqueue_analysis(str(doc.id))
     except Exception as exc:  # noqa: BLE001
-        logger.warning("Embedding index after confirm failed for %s: %s", doc.id, exc)
+        logger.warning("Could not enqueue post-confirm analysis for %s: %s", doc.id, exc)
     await publish_document_status(doc.id, await _status_payload(db, doc))
     job = await _latest_job(db, doc.id)
     return _to_status(doc, job.retry_count if job else 0)

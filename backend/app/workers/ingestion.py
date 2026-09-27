@@ -192,6 +192,37 @@ def index_document_embeddings(self, document_id: str) -> str:
     return document_id
 
 
+@celery_app.task(bind=True)
+def analyze_confirmed_document(self, document_id: str) -> str:
+    """Post-confirm analysis: flags → versioned summaries → vector index.
+
+    Each step commits on its own so an LLM or Chroma outage never undoes the others.
+    Summary failures are stored as failed rows (patients can regenerate), so no Celery retry.
+    """
+    from app.services import embedding_service, summary_service, trend_service
+
+    uid = UUID(document_id)
+
+    async def _step(name: str, fn) -> None:
+        try:
+            async with worker_db() as db:
+                await fn(db, uid)
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("Post-confirm %s failed for %s: %s", name, document_id, exc)
+
+    async def _go():
+        await _step("flagging", trend_service.apply_flags)
+        await _step("summaries", summary_service.generate_summaries)
+        await _step("indexing", embedding_service.index_document)
+
+    _run(_go())
+    return document_id
+
+
+def enqueue_analysis(document_id: str) -> None:
+    analyze_confirmed_document.delay(document_id)
+
+
 def enqueue_ingest(document_id: str) -> None:
     chain(
         run_ocr_or_dicom_parse.s(document_id),

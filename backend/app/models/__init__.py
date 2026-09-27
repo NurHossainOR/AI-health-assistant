@@ -7,6 +7,7 @@ from app.models.document import (
     ExtractedField,
     ImagingStudy,
 )
+from app.models.summary import DocumentSummary, SummaryAudience, SummaryStatus
 from app.models.user import (
     AuditLog,
     ConsentGrant,
@@ -42,4 +43,7 @@ __all__ = [
     "ChatSession",
     "ChatMessage",
     "ChatRole",
+    "DocumentSummary",
+    "SummaryAudience",
+    "SummaryStatus",
 ]
