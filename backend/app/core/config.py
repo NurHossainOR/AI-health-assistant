@@ -31,7 +31,12 @@ class Settings(BaseSettings):
     secret_key: str = "change-me"
     frontend_url: str = "http://localhost:5173"
     cors_origins: List[str] = Field(
-        default_factory=lambda: ["http://localhost:5173", "http://127.0.0.1:5173"]
+        default_factory=lambda: [
+            "http://localhost:5173",
+            "http://127.0.0.1:5173",
+            "http://localhost:3000",
+            "http://127.0.0.1:3000",
+        ]
     )
     inactivity_timeout_minutes: int = 15
 
@@ -64,6 +69,15 @@ class Settings(BaseSettings):
     presigned_url_expire_seconds: int = 600
     max_upload_bytes: int = 25 * 1024 * 1024
     extraction_confidence_threshold: float = 0.75
+
+    gemini_api_key: str = ""
+    gemini_chat_model: str = "gemini-3-flash-preview"
+    gemini_embedding_model: str = "models/gemini-embedding-001"
+    rag_top_k: int = 6
+    rag_history_turns: int = 10
+    chroma_host: str = "localhost"
+    chroma_port: int = 8001
+    chroma_collection: str = "patient_record_chunks"
 
     @property
     def b2_s3_endpoint(self) -> str:
