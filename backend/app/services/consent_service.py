@@ -4,7 +4,7 @@ from datetime import datetime, timezone
 from typing import Optional
 from uuid import UUID
 
-from sqlalchemy import select
+from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.exceptions import AppError
@@ -28,6 +28,27 @@ DOC_TYPE_LABELS = {
     DocType.discharge: "Discharge summary",
     DocType.other: "Other",
 }
+
+# None = every document type. Empty frozenset is unused (document scope is id-based).
+SCOPE_DOC_TYPES: dict[ConsentScope, frozenset[DocType] | None] = {
+    ConsentScope.all: None,
+    ConsentScope.labs: frozenset({DocType.blood_test}),
+    ConsentScope.imaging: frozenset({DocType.mri, DocType.ct}),
+    ConsentScope.prescriptions: frozenset({DocType.prescription}),
+    ConsentScope.discharge: frozenset({DocType.discharge}),
+    ConsentScope.document: frozenset(),
+}
+
+
+def grant_covers_document(grant: ConsentGrant, document: Document) -> bool:
+    if grant.scope == ConsentScope.document:
+        return _grant_document_id(grant) == document.id
+    if grant.scope not in SCOPE_DOC_TYPES:
+        return False
+    allowed = SCOPE_DOC_TYPES[grant.scope]
+    if allowed is None:
+        return True
+    return document.doc_type in allowed
 
 
 def _utcnow() -> datetime:
@@ -68,14 +89,6 @@ def _document_preview(doc: Optional[Document]) -> dict:
     label = f"{name} · {date}" if date else name
     includes = [DOC_TYPE_LABELS.get(doc.doc_type, doc.doc_type.value)]
     return {"label": label, "includes": includes}
-
-
-async def _preview_for_grant(db: AsyncSession, grant: ConsentGrant) -> dict:
-    if grant.scope == ConsentScope.document:
-        doc_id = _grant_document_id(grant)
-        doc = await db.get(Document, doc_id) if doc_id else None
-        return _document_preview(doc)
-    return _scope_preview(grant.scope)
 
 
 async def active_grant_exists(
@@ -142,11 +155,8 @@ async def can_access_document(
     for grant in result.scalars().all():
         if not _is_active_grant(grant):
             continue
-        if grant.scope == ConsentScope.document:
-            if _grant_document_id(grant) == document.id:
-                return True
-            continue
-        return True
+        if grant_covers_document(grant, document):
+            return True
     return False
 
 
@@ -162,15 +172,34 @@ async def granted_document_access(
     )
     full_patient_ids: set[UUID] = set()
     document_ids: set[UUID] = set()
+    typed_patients: dict[DocType, set[UUID]] = {}
     for grant in result.scalars().all():
         if not _is_active_grant(grant):
             continue
-        if grant.scope == ConsentScope.document:
+        if grant.scope == ConsentScope.all:
+            full_patient_ids.add(grant.patient_id)
+        elif grant.scope == ConsentScope.document:
             doc_id = _grant_document_id(grant)
             if doc_id:
                 document_ids.add(doc_id)
         else:
-            full_patient_ids.add(grant.patient_id)
+            allowed = SCOPE_DOC_TYPES.get(grant.scope) or frozenset()
+            for doc_type in allowed:
+                typed_patients.setdefault(doc_type, set()).add(grant.patient_id)
+    if typed_patients:
+        type_clauses = [
+            (Document.patient_id.in_(patient_ids)) & (Document.doc_type == doc_type)
+            for doc_type, patient_ids in typed_patients.items()
+            if patient_ids
+        ]
+        if type_clauses:
+            typed = await db.execute(
+                select(Document.id).where(
+                    or_(*type_clauses),
+                    Document.status != DocumentStatus.awaiting_upload,
+                )
+            )
+            document_ids.update(typed.scalars().all())
     return list(full_patient_ids), list(document_ids)
 
 
@@ -334,17 +363,42 @@ async def list_grants(
 
     result = await db.execute(q.order_by(ConsentGrant.granted_at.desc()))
     grants = list(result.scalars().all())
+    if not grants:
+        return []
+
+    user_ids = {g.patient_id for g in grants} | {g.grantee_id for g in grants}
+    users = (
+        await db.execute(select(User).where(User.id.in_(user_ids)))
+    ).scalars()
+    users_by_id = {u.id: u for u in users}
+
+    doc_ids = [
+        doc_id
+        for g in grants
+        if (doc_id := _grant_document_id(g)) is not None
+    ]
+    docs_by_id: dict[UUID, Document] = {}
+    if doc_ids:
+        docs = (
+            await db.execute(select(Document).where(Document.id.in_(doc_ids)))
+        ).scalars()
+        docs_by_id = {d.id: d for d in docs}
 
     outs: list[ConsentGrantOut] = []
     for g in grants:
-        patient = await db.get(User, g.patient_id)
-        grantee = await db.get(User, g.grantee_id)
+        patient = users_by_id.get(g.patient_id)
+        grantee = users_by_id.get(g.grantee_id)
+        preview = (
+            _document_preview(docs_by_id.get(_grant_document_id(g)))
+            if g.scope == ConsentScope.document
+            else _scope_preview(g.scope)
+        )
         outs.append(
             _to_out(
                 g,
                 patient_name=patient.full_name if patient else None,
                 grantee_name=grantee.full_name if grantee else None,
-                preview=await _preview_for_grant(db, g),
+                preview=preview,
             )
         )
     return outs
