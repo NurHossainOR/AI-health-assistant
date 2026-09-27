@@ -9,7 +9,9 @@ import { ConsentRequestReview } from '@/components/profile/ConsentRequestReview'
 import { AppNav } from '@/components/layout/AppNav'
 import { apiFetch } from '@/lib/api'
 import type { HealthDocument } from '@/types/documents'
-import { documentDisplayName, documentShareLabel } from '@/types/documents'
+import { DOC_TYPE_LABELS, documentDisplayName, documentShareLabel } from '@/types/documents'
+
+const RECENT_REPORTS = 5
 
 export function DashboardView() {
   const { user } = useAuth()
@@ -82,10 +84,40 @@ export function DashboardView() {
                 <div className="label">Last upload</div>
               </div>
               <div className="stat-card">
-                <div className="value">{docs.filter((d) => d.status === 'needs_review').length}</div>
-                <div className="label">Need review</div>
+                <div className="value">
+                  {docs.filter((d) => d.status === 'needs_review' || d.status === 'extracted').length}
+                </div>
+                <div className="label">Awaiting confirmation</div>
               </div>
             </div>
+            {docs.length > 0 && (
+              <>
+                <h3 style={{ margin: '1.5rem 0 0.5rem' }}>Recent reports</h3>
+                <ul className="grant-list">
+                  {docs.slice(0, RECENT_REPORTS).map((d) => (
+                    <li key={d.id}>
+                      <div>
+                        <Link href={`/documents/${d.id}`}>
+                          <strong>{documentDisplayName(d)}</strong>
+                        </Link>
+                        <span className="badge badge-normal" style={{ marginLeft: '8px' }}>
+                          {DOC_TYPE_LABELS[d.doc_type]}
+                        </span>
+                        <span className="muted" style={{ display: 'block' }}>
+                          {d.status === 'confirmed'
+                            ? 'Summary available'
+                            : d.status === 'extracted' || d.status === 'needs_review'
+                              ? 'Awaiting your confirmation'
+                              : d.status.replace('_', ' ')}{' '}
+                          ·{' '}
+                          {new Date(d.uploaded_at).toLocaleDateString()}
+                        </span>
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              </>
+            )}
           </section>
         )}
 
@@ -106,7 +138,9 @@ export function DashboardView() {
                 {docs.map((d) => (
                   <li key={d.id}>
                     <div>
-                      <strong>{documentShareLabel(documentDisplayName(d), d.uploaded_at)}</strong>
+                      <Link href={`/documents/${d.id}`}>
+                        <strong>{documentShareLabel(documentDisplayName(d), d.uploaded_at)}</strong>
+                      </Link>
                       <span className="badge badge-normal" style={{ marginLeft: '8px' }}>
                         {d.doc_type}
                       </span>

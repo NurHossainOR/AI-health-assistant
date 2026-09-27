@@ -1,7 +1,9 @@
 'use client'
 
 import { useCallback, useEffect, useRef, useState } from 'react'
+import Link from 'next/link'
 import { useRouter } from 'next/navigation'
+import { useQueryClient } from '@tanstack/react-query'
 import { apiFetch, getAccessToken } from '@/lib/api'
 import { fileStore, useUploadQueueStore, type QueueItem } from '@/lib/uploadQueue'
 import { useAuth } from '@/components/providers/AuthProvider'
@@ -55,6 +57,8 @@ export function UploadCenter() {
   const patch = useUploadQueueStore((s) => s.patch)
   const applyStatus = useUploadQueueStore((s) => s.applyStatus)
   const [reviewId, setReviewId] = useState<string | null>(null)
+  const [confirmedId, setConfirmedId] = useState<string | null>(null)
+  const queryClient = useQueryClient()
   const [gateError, setGateError] = useState<string | null>(null)
   const watchers = useRef<Map<string, () => void>>(new Map())
 
@@ -243,9 +247,17 @@ export function UploadCenter() {
           documentId={reviewId}
           onConfirmed={() => {
             applyStatus(reviewId, { status: 'confirmed', needs_review: false, stage: 'Ready' })
+            setConfirmedId(reviewId)
             setReviewId(null)
+            void queryClient.invalidateQueries({ queryKey: ['documents'] })
           }}
         />
+      )}
+      {confirmedId && !reviewId && (
+        <p className="form-success">
+          Report confirmed. Summaries are being generated —{' '}
+          <Link href={`/documents/${confirmedId}`}>view summary</Link>.
+        </p>
       )}
     </div>
   )

@@ -1,3 +1,5 @@
+import type { LabFlag } from '@/types/trends'
+
 export type DocType =
   | 'blood_test'
   | 'prescription'
@@ -48,6 +50,7 @@ export interface ExtractedField {
   observed_at?: string | null
   source_confidence: number
   canonical_code?: string | null
+  flag?: LabFlag | null
 }
 
 export interface ProcessingConsent {

@@ -1,21 +1,10 @@
 'use client'
 
-import { apiFetchBlob } from '@/lib/api'
+import Link from 'next/link'
 import type { ChatCitation, ChatMessage as ChatMessageType } from '@/types/chat'
 
 function citationForIndex(index: number, citations: ChatCitation[]) {
   return citations.find((c) => c.source_index === index)
-}
-
-async function openDocument(documentId: string) {
-  try {
-    const { blob } = await apiFetchBlob(`/api/v1/documents/${documentId}/file`)
-    const url = URL.createObjectURL(blob)
-    window.open(url, '_blank', 'noopener,noreferrer')
-    window.setTimeout(() => URL.revokeObjectURL(url), 60_000)
-  } catch {
-    window.alert('Could not open that document.')
-  }
 }
 
 function renderContent(content: string, citations: ChatCitation[]) {
@@ -71,14 +60,13 @@ export function ChatMessage({
           {parts?.length
             ? parts.map((part, i) =>
                 part.type === 'cite' && part.citation ? (
-                  <button
+                  <Link
                     key={`${part.citation.document_id}-${i}`}
-                    type="button"
+                    href={`/documents/${part.citation.document_id}`}
                     className="cite"
-                    onClick={() => void openDocument(part.citation!.document_id)}
                   >
                     {part.citation.label}
-                  </button>
+                  </Link>
                 ) : part.type === 'cite' ? (
                   <span key={i} className="cite">
                     {part.value}
@@ -93,14 +81,13 @@ export function ChatMessage({
       {shownCitations.length > 0 && (
         <div className="chat-cite-row">
           {shownCitations.map((citation) => (
-            <button
+            <Link
               key={`${citation.document_id}-${citation.source_index}`}
-              type="button"
+              href={`/documents/${citation.document_id}`}
               className="cite"
-              onClick={() => void openDocument(citation.document_id)}
             >
               {citation.label}
-            </button>
+            </Link>
           ))}
         </div>
       )}

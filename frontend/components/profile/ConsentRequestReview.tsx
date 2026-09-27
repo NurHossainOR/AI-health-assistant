@@ -1,30 +1,14 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { apiFetch, apiFetchBlob } from '@/lib/api'
+import { apiFetch } from '@/lib/api'
+import { openDocumentFile } from '@/lib/openDocument'
 import type { ConsentGrant } from '@/types/auth'
 import type { HealthDocument } from '@/types/documents'
 
 function grantDocumentId(g: ConsentGrant): string | null {
   const raw = g.scope_detail?.document_id
   return typeof raw === 'string' && raw ? raw : null
-}
-
-async function openDocumentFile(documentId: string) {
-  const { blob, filename } = await apiFetchBlob(`/api/v1/documents/${documentId}/file`)
-  const url = URL.createObjectURL(blob)
-  const opened = window.open(url, '_blank', 'noopener,noreferrer')
-  if (!opened) {
-    const a = document.createElement('a')
-    a.href = url
-    a.target = '_blank'
-    a.rel = 'noopener noreferrer'
-    if (!blob.type.startsWith('image/') && blob.type !== 'application/pdf') {
-      a.download = filename || 'document'
-    }
-    a.click()
-  }
-  window.setTimeout(() => URL.revokeObjectURL(url), 60_000)
 }
 
 export function ConsentRequestReview() {

@@ -90,9 +90,9 @@ export function UploadQueueItem({
             Upload
           </button>
         )}
-        {item.needsReview && (
+        {(item.needsReview || item.status === 'extracted') && (
           <button type="button" className="btn btn-teal" style={{ width: 'auto' }} onClick={() => onReview(item)}>
-            Review fields
+            {item.needsReview ? 'Review fields' : 'Review & confirm'}
           </button>
         )}
         {item.status === 'failed' && (
