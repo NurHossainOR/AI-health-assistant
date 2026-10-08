@@ -2,6 +2,7 @@
 
 import Link from 'next/link'
 import { useState } from 'react'
+import { useAuth } from '@/components/providers/AuthProvider'
 
 function SpondonLogo({ size = 22 }: { size?: number }) {
   return (
@@ -33,6 +34,7 @@ function ArrowIcon() {
 
 export default function HomePage() {
   const [activeTab, setActiveTab] = useState('patient')
+  const { user, logout } = useAuth()
 
   return (
     <>
@@ -49,8 +51,19 @@ export default function HomePage() {
             <Link href="/dashboard">Dashboard</Link>
           </div>
           <div className="nav-cta">
-            <Link href="/login" className="btn btn-ghost">Sign in</Link>
-            <Link href="/signup" className="btn btn-primary">Get started</Link>
+            {user ? (
+              <>
+                <span style={{ fontSize: '14px', color: 'var(--ink-soft)' }}>{user.full_name}</span>
+                <button type="button" className="btn btn-ghost" onClick={() => void logout()}>
+                  Sign out
+                </button>
+              </>
+            ) : (
+              <>
+                <Link href="/login" className="btn btn-ghost">Sign in</Link>
+                <Link href="/signup" className="btn btn-primary">Get started</Link>
+              </>
+            )}
           </div>
         </div>
       </nav>
