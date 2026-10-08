@@ -194,12 +194,12 @@ def index_document_embeddings(self, document_id: str) -> str:
 
 @celery_app.task(bind=True)
 def analyze_confirmed_document(self, document_id: str) -> str:
-    """Post-confirm analysis: flags → versioned summaries → vector index.
+    """Post-confirm analysis: flags → alerts → versioned summaries → vector index.
 
     Each step commits on its own so an LLM or Chroma outage never undoes the others.
     Summary failures are stored as failed rows (patients can regenerate), so no Celery retry.
     """
-    from app.services import embedding_service, summary_service, trend_service
+    from app.services import alert_service, embedding_service, summary_service, trend_service
 
     uid = UUID(document_id)
 
@@ -212,6 +212,7 @@ def analyze_confirmed_document(self, document_id: str) -> str:
 
     async def _go():
         await _step("flagging", trend_service.apply_flags)
+        await _step("alerts", alert_service.sync_alerts_for_document)
         await _step("summaries", summary_service.generate_summaries)
         await _step("indexing", embedding_service.index_document)
 

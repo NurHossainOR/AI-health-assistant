@@ -1,3 +1,4 @@
+from app.models.alert import Alert
 from app.models.chat import ChatMessage, ChatRole, ChatSession
 from app.models.document import (
     DocType,
@@ -52,4 +53,5 @@ __all__ = [
     "SummaryAudience",
     "SummaryStatus",
     "SummaryTranslation",
+    "Alert",
 ]

@@ -4,6 +4,7 @@ import Link from 'next/link'
 import type { ReactNode } from 'react'
 import { useAuth } from '@/components/providers/AuthProvider'
 import { LanguageToggle } from '@/components/layout/LanguageToggle'
+import { AlertBell } from '@/components/layout/AlertBell'
 
 function SpondonLogo() {
   return (
@@ -40,6 +41,7 @@ export function AppNav({ extra }: { extra?: ReactNode }) {
         </div>
         <div className="nav-cta">
           {extra}
+          {user && <AlertBell />}
           {user && <LanguageToggle />}
           {user && (
             <span style={{ fontSize: '14px', color: 'var(--ink-soft)' }}>{user.full_name}</span>

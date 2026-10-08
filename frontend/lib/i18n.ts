@@ -65,6 +65,14 @@ const en = {
   'flag.abnormal': 'Abnormal',
   'flag.critical': 'Critical',
   'flag.unknown': 'No range',
+  'alerts.title': 'Alerts',
+  'alerts.empty': "You're all caught up.",
+  'alerts.loading': 'Loading alerts…',
+  'alerts.failed': 'Could not load alerts.',
+  'alerts.markAllRead': 'Mark all as read',
+  'alerts.viewReport': 'View report',
+  'alerts.reference': 'Reference',
+  'alerts.unreadAria': '{count} unread alerts',
 } as const
 
 export type MessageKey = keyof typeof en
@@ -132,6 +140,14 @@ const bn: Record<MessageKey, string> = {
   'flag.abnormal': 'অস্বাভাবিক',
   'flag.critical': 'গুরুতর',
   'flag.unknown': 'সীমা নেই',
+  'alerts.title': 'সতর্কতা',
+  'alerts.empty': 'নতুন কোনো সতর্কতা নেই।',
+  'alerts.loading': 'সতর্কতা লোড হচ্ছে…',
+  'alerts.failed': 'সতর্কতা লোড করা যায়নি।',
+  'alerts.markAllRead': 'সব পঠিত হিসেবে চিহ্নিত করুন',
+  'alerts.viewReport': 'রিপোর্ট দেখুন',
+  'alerts.reference': 'রেফারেন্স',
+  'alerts.unreadAria': '{count}টি অপঠিত সতর্কতা',
 }
 
 const DICTIONARIES: Record<Language, Record<MessageKey, string>> = { en, bn }

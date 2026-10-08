@@ -11,6 +11,7 @@ from app.core.config import get_settings
 from app.core.exceptions import AppError, app_error_handler
 from app.db.session import Base, engine
 from app.models import (  # noqa: F401 — register models on metadata
+    Alert,
     AuditLog,
     ChatMessage,
     ChatSession,
@@ -97,6 +98,15 @@ RLS_SQL = [
     "DROP POLICY IF EXISTS document_summary_translations_patient_scope ON document_summary_translations",
     """
     CREATE POLICY document_summary_translations_patient_scope ON document_summary_translations
+      USING (
+        patient_id::text = current_setting('app.current_user_id', true)
+        OR current_setting('app.bypass_rls', true) = 'on'
+      )
+    """,
+    "ALTER TABLE alerts ENABLE ROW LEVEL SECURITY",
+    "DROP POLICY IF EXISTS alerts_patient_scope ON alerts",
+    """
+    CREATE POLICY alerts_patient_scope ON alerts
       USING (
         patient_id::text = current_setting('app.current_user_id', true)
         OR current_setting('app.bypass_rls', true) = 'on'
