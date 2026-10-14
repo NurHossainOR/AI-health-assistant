@@ -86,16 +86,3 @@ API calls are proxied through Next.js (`/api/*` → backend). Optional override:
 | **Admin** | User list, doctor approval queue, audit log viewer (metadata only), pipeline health stub |
 | **Security** | RS256 JWT, refresh rotation + reuse detection, RBAC dependencies, audit logging, PostgreSQL RLS policies |
 | **Frontend** | Login/signup, AuthProvider (in-memory access token + cookie refresh), 15 min inactivity logout, route guards, consent & admin screens |
-
-## Default admin
-
-- Email: `admin@example.com`
-- Password: `AdminPass123!`
-
-Change via: `python scripts/create_admin.py you@example.com YourPassword`
-
-## Notes
-
-- Email verification and password-reset links are logged to the backend console in dev (wire SES + BAA before production).
-- JWT keys live in `keys/` (gitignored). Generate with `openssl genrsa -out keys/jwt_private.pem 2048`.
-- Doctor registrations start as `pending_verification`; admin must approve before patients can grant consent.
